@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Recos</title>
+
+<!-- PWA : installation en app sur iPhone / iPad / Mac / PC -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22303A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Recos">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-app-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --paper:#F6F1E7;
+    --paper-2:#EFE7D6;
+    --ink:#22303A;
+    --ink-soft:#5B6B72;
+    --line: #D8CDB4;
+    --brass:#A9782F;
+    --brass-soft:#E4CE9E;
+    --teal:#3F6B63;
+    --teal-soft:#DCE7E2;
+    --rust:#AD5A3F;
+    --rust-soft:#F0DBD1;
+    --slate:#6B7684;
+    --slate-soft:#E4E6E7;
+    --card-shadow: 0 1px 0 rgba(34,48,58,0.06), 0 6px 16px -10px rgba(34,48,58,0.35);
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 500px at 50% -10%, #fffaf0 0%, var(--paper) 45%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding-bottom: 96px;
+  }
+  .display{font-family:'Fraunces', serif;}
+  .mono{font-family:'IBM Plex Mono', monospace;}
+
+  /* HEADER */
+  header{
+    position:sticky; top:0; z-index:30;
+    background: linear-gradient(180deg, var(--paper) 70%, rgba(246,241,231,0));
+    padding: calc(18px + env(safe-area-inset-top)) 16px 10px;
+  }
+  .brand{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .brand h1{
+    font-size: 26px; font-weight:600; letter-spacing:-0.01em; margin:0;
+    display:flex; align-items:baseline; gap:8px;
+  }
+  .brand h1 .tally{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px; font-weight:500; color:var(--ink-soft);
+    background:var(--paper-2); border:1px solid var(--line);
+    padding:2px 8px; border-radius:20px;
+  }
+  .search-wrap{
+    display:flex; align-items:center; gap:8px;
+    background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:9px 12px; box-shadow: inset 0 1px 2px rgba(34,48,58,0.04);
+  }
+  .search-wrap svg{flex:none; color:var(--ink-soft);}
+  .search-wrap input{
+    border:none; outline:none; background:transparent; width:100%;
+    font-family:'IBM Plex Sans', sans-serif; font-size:15px; color:var(--ink);
+  }
+  .search-wrap input::placeholder{color:#A3ABA2;}
+
+  /* TABS (rolodex) */
+  .tabs{
+    display:flex; gap:6px; overflow-x:auto; padding:14px 16px 4px;
+    scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{
+    flex:none; display:flex; align-items:center; gap:6px;
+    padding: 8px 13px 9px; border-radius: 10px 10px 4px 4px;
+    font-size:13.5px; font-weight:500; color:var(--ink-soft);
+    background:var(--paper-2); border:1px solid var(--line); border-bottom:3px solid var(--line);
+    cursor:pointer; white-space:nowrap;
+    transition: transform .12s ease;
+  }
+  .tab:active{transform: scale(0.97);}
+  .tab .n{
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    background:rgba(34,48,58,0.08); padding:1px 6px; border-radius:20px;
+  }
+  .tab.active{
+    background:#fff; color:var(--ink); border-color: var(--line);
+    border-bottom:3px solid var(--brass);
+    box-shadow: 0 2px 6px -2px rgba(34,48,58,0.2);
+  }
+  .tab.active .n{background:var(--brass-soft); color:#7A5620;}
+
+  /* LIST */
+  main{padding: 8px 16px 20px;}
+  .empty{
+    text-align:center; padding: 60px 20px; color:var(--ink-soft);
+  }
+  .empty .glyph{font-size:34px; margin-bottom:10px; opacity:.5;}
+  .empty .display{font-size:19px; color:var(--ink); margin-bottom:4px;}
+
+  .card{
+    background:#fff; border:1px solid var(--line); border-radius: var(--radius);
+    padding: 13px 14px; margin-bottom:10px; box-shadow: var(--card-shadow);
+    display:flex; gap:12px; align-items:flex-start; cursor:pointer;
+    transition: transform .1s ease;
+  }
+  .card:active{transform: scale(0.985);}
+  .card .avatar{
+    flex:none; width:40px; height:40px; border-radius:50%;
+    background: var(--teal-soft); color:var(--teal);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Fraunces', serif; font-weight:600; font-size:15px;
+  }
+  .card .body{min-width:0; flex:1;}
+  .card .row1{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
+  .card .name{font-weight:600; font-size:15.5px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .card .ville{font-size:12px; color:var(--ink-soft); flex:none;}
+  .card .profession{font-size:13px; color:var(--ink-soft); margin-top:1px;}
+  .card .reco{
+    font-size:12px; color:var(--brass); margin-top:5px;
+    display:flex; align-items:center; gap:4px;
+  }
+  .card .comment{
+    font-size:12.5px; color:var(--ink-soft); margin-top:5px;
+    font-style:italic; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .card .rappel-badge{
+    display:inline-flex; align-items:center; gap:4px;
+    font-size:11.5px; font-weight:600; margin-top:6px;
+    padding:3px 8px; border-radius:20px;
+  }
+  .card .rappel-badge.overdue{background:var(--rust-soft); color:var(--rust);}
+  .card .rappel-badge.today{background:var(--brass-soft); color:#7A5620;}
+  .card .rappel-badge.upcoming{background:var(--slate-soft); color:var(--slate);}
+  .card .call-btn{
+    flex:none; width:34px; height:34px; border-radius:50%;
+    background:var(--teal-soft); color:var(--teal);
+    display:flex; align-items:center; justify-content:center;
+    text-decoration:none;
+  }
+
+  /* FAB */
+  .fab{
+    position:fixed; right:18px; bottom:calc(22px + env(safe-area-inset-bottom)); z-index:40;
+    width:56px; height:56px; border-radius:50%;
+    background:var(--ink); color:var(--paper);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 10px 24px -8px rgba(34,48,58,0.55);
+    border:none; cursor:pointer;
+  }
+  .fab:active{transform:scale(0.94);}
+
+  /* SHEET */
+  .overlay{
+    position:fixed; inset:0; background:rgba(34,48,58,0.42);
+    z-index:9999; display:flex; align-items:flex-end;
+    opacity:0; pointer-events:none; transition:opacity .2s ease;
+  }
+  .overlay.open{opacity:1; pointer-events:auto;}
+  .sheet{
+    background:var(--paper); width:100%; max-height:92vh; overflow-y:auto;
+    border-radius: 20px 20px 0 0; padding: 8px 18px 26px;
+    transform: translateY(20px); transition: transform .22s ease;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.15);
+  }
+  .overlay.open .sheet{transform: translateY(0);}
+  .sheet-handle{
+    width:38px; height:4px; border-radius:4px; background:var(--line);
+    margin: 10px auto 14px;
+  }
+  .sheet-title{
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;
+  }
+  .sheet-title h2{font-size:20px; margin:0; font-weight:600;}
+  .sheet-title button.close{
+    background:none; border:none; color:var(--ink-soft); font-size:22px; cursor:pointer;
+    line-height:1; padding:4px;
+  }
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--ink-soft); margin-bottom:5px; font-weight:600;
+  }
+  .field input, .field textarea{
+    width:100%; border:1px solid var(--line); background:#fff; border-radius:10px;
+    padding:10px 12px; font-size:15px; font-family:'IBM Plex Sans', sans-serif;
+    color:var(--ink); outline:none;
+  }
+  .field input:focus, .field textarea:focus{border-color:var(--teal);}
+  .field textarea{resize:vertical; min-height:56px;}
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+  .status-picker{display:flex; flex-wrap:wrap; gap:6px;}
+  .status-chip{
+    padding:7px 11px; border-radius:20px; font-size:12.5px; font-weight:500;
+    border:1px solid var(--line); background:#fff; color:var(--ink-soft); cursor:pointer;
+  }
+  .status-chip.sel{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+
+  .sheet-actions{
+    display:flex; gap:10px; margin-top:18px;
+  }
+  .btn{
+    flex:1; border:none; border-radius:12px; padding:13px; font-size:15px; font-weight:600;
+    cursor:pointer; font-family:'IBM Plex Sans', sans-serif;
+  }
+  .btn-primary{background:var(--ink); color:var(--paper);}
+  .btn-primary:active{opacity:.85;}
+  .btn-danger{background:var(--rust-soft); color:var(--rust);}
+  .btn-danger:active{opacity:.85;}
+  .btn-ghost{background:var(--paper-2); color:var(--ink); border:1px solid var(--line);}
+
+  .toast{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%) translateY(-20px);
+    background:var(--ink); color:var(--paper); padding:9px 16px; border-radius:30px;
+    font-size:13px; z-index:10000; opacity:0; transition: all .25s ease; pointer-events:none;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  /* PHONE (visible + cliquable) */
+  .card .phone-line{
+    font-size:12.5px; color:var(--teal); margin-top:4px;
+    display:flex; align-items:center; gap:4px; text-decoration:none;
+  }
+  .field .call-inline{
+    display:flex; gap:8px; align-items:center;
+  }
+  .field .call-inline input{flex:1;}
+  .call-inline-btn{
+    flex:none; width:40px; height:40px; border-radius:10px;
+    background:var(--teal-soft); color:var(--teal); display:flex; align-items:center; justify-content:center;
+    text-decoration:none; border:1px solid var(--line);
+  }
+
+  /* NOTIFICATIONS */
+  .notif-btn{
+    flex:none; width:34px; height:34px; border-radius:50%;
+    background:var(--paper-2); border:1px solid var(--line); color:var(--ink-soft);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .notif-btn.on{background:var(--brass-soft); color:#7A5620; border-color:var(--brass-soft);}
+
+  /* MAP TAB */
+  #mapView{
+    display:none; height: calc(100vh - 190px); min-height:400px;
+    border-radius: var(--radius); overflow:hidden; border:1px solid var(--line);
+    margin: 4px 16px 16px;
+  }
+  #mapView.active{display:block;}
+  .leaflet-popup-content{font-family:'IBM Plex Sans', sans-serif; font-size:13px;}
+  .leaflet-popup-content b{font-family:'Fraunces', serif;}
+  .map-popup-item{padding:3px 0; border-top:1px solid #eee; cursor:pointer;}
+  .map-popup-item:hover{background:#F6F1E7;}
+  .map-popup-item:first-of-type{border-top:none;}
+
+  /* RESPONSIVE : iPad / Mac (écrans larges, souris/trackpad) */
+  @media (min-width: 780px){
+    body{padding-bottom: 40px;}
+    header{
+      max-width: 900px; margin: 0 auto; padding: 24px 24px 10px;
+    }
+    main{max-width: 900px; margin: 0 auto; padding: 8px 24px 32px;}
+    .brand h1{font-size:30px;}
+    .search-wrap{padding:11px 14px;}
+    .search-wrap input{font-size:16px;}
+    .tabs{
+      flex-wrap: wrap; overflow-x: visible; padding: 16px 0 8px;
+    }
+    .tab{cursor:pointer;}
+    .tab:hover{background:#fff; border-color:var(--ink-soft);}
+    #list{
+      display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; align-items:start;
+    }
+    .card{margin-bottom:0; cursor:pointer;}
+    .card:hover{
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px -6px rgba(34,48,58,0.3), var(--card-shadow);
+    }
+    .fab{
+      right: calc(50% - 450px + 24px); bottom:28px;
+    }
+    #mapView{max-width:900px; margin:4px auto 24px; height:560px;}
+    .overlay{align-items:center; justify-content:center;}
+    .sheet{
+      max-width:520px; border-radius:20px; max-height:85vh;
+    }
+  }
+  @media (min-width: 1100px){
+    header, main, #mapView{max-width:1080px;}
+    #list{grid-template-columns: repeat(3, 1fr);}
+    .fab{right: calc(50% - 540px + 24px);}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Recos <span class="tally" id="tally">…</span></h1>
+    <button class="notif-btn" id="notifBtn" title="Activer les notifications de rappel">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    </button>
+    <button class="notif-btn" id="syncRemindersBtn" title="Copier la liste des rappels pour Rappels iPhone">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    </button>
+  </div>
+  <div class="search-wrap">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="search" type="text" placeholder="Chercher un nom, une ville, une reco…">
+    <svg id="searchClear" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none; cursor:pointer; flex:none;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+  </div>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<main id="list"></main>
+<div id="mapView"></div>
+
+<button class="fab" id="fabAdd" aria-label="Ajouter">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      <h2 id="sheetTitle" class="display">Nouveau contact</h2>
+      <button class="close" id="closeSheet">&times;</button>
+    </div>
+
+    <div class="two-col">
+      <div class="field"><label>Nom</label><input id="f_nom" type="text" autocomplete="off"></div>
+      <div class="field"><label>Prénom</label><input id="f_prenom" type="text" autocomplete="off"></div>
+    </div>
+    <div class="field">
+      <label>Téléphone</label>
+      <div class="call-inline">
+        <input id="f_tel" type="tel" autocomplete="off">
+        <a class="call-inline-btn" id="callInlineBtn" href="#" title="Appeler">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </a>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="field"><label>Ville</label><input id="f_ville" type="text" autocomplete="off"></div>
+      <div class="field"><label>Profession</label><input id="f_profession" type="text" autocomplete="off"></div>
+    </div>
+    <div class="field"><label>Recommandé par</label><input id="f_reco" type="text" autocomplete="off"></div>
+    <div class="field">
+      <label>Date de rappel</label>
+      <input id="f_rappel_date" type="date">
+    </div>
+    <div class="field"><label>Commentaires</label><textarea id="f_commentaires"></textarea></div>
+    <div class="field">
+      <label>Statut</label>
+      <div class="status-picker" id="statusPicker"></div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn btn-danger" id="deleteBtn" style="display:none;">Supprimer</button>
+      <button class="btn btn-primary" id="saveBtn">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STATUSES = ["Contact","Rappeler","RDV posé","R1 fait","R2 fait","R3 fait","Signé","Refus","Client perdu"];
+const STATUS_COLORS = {
+  "Contact":"slate", "Rappeler":"rust", "RDV posé":"teal", "R1 fait":"teal",
+  "R2 fait":"teal", "R3 fait":"teal", "Signé":"brass", "Refus":"slate", "Client perdu":"slate"
+};
+
+const SEED = [{"id": 1, "nom": "JOLY", "prenom": "Marjorie", "tel": "06 48 76 11 02", "ville": "Orléans", "profession": "Secrétaire", "reco": "Leslie PLAUT", "statut": "Contact", "commentaires": ""}, {"id": 2, "nom": "CARRET", "prenom": "Pierre", "tel": "06 31 47 96 28", "ville": "Arcachon", "profession": "Orthopédiste", "reco": "Loic GAUDUCHON", "statut": "Contact", "commentaires": "Conjoint Lucie GERMAIN"}, {"id": 3, "nom": "GERMAIN", "prenom": "Lucie", "tel": "06 33 65 81 17", "ville": "Arcachon", "profession": "Gynécologue", "reco": "Loic GAUDUCHON", "statut": "Contact", "commentaires": "Conjointe Pierre CARRET"}, {"id": 4, "nom": "QUERCY", "prenom": "Adrien", "tel": "06 70 25 30 37", "ville": "Bordeaux", "profession": "Orthopédiste", "reco": "Loic GAUDUCHON", "statut": "Contact", "commentaires": ""}, {"id": 5, "nom": "BENZAKOUR", "prenom": "Ahmed", "tel": "06 14 98 23 82", "ville": "Orléans", "profession": "Orthopédiste", "reco": "Loic GAUDUCHON", "statut": "Contact", "commentaires": ""}, {"id": 6, "nom": "DARCHE", "prenom": "Louis", "tel": "06 96 22 52 72", "ville": "Périgueux", "profession": "Chirurgien Digestif", "reco": "Loic GAUDUCHON", "statut": "Contact", "commentaires": "Mauvais numéro"}, {"id": 7, "nom": "DELRIEUX", "prenom": "Jérémy", "tel": "07 86 39 61 28", "ville": "Poitiers", "profession": "Pharmacien", "reco": "Florian MONTAGNE", "statut": "Contact", "commentaires": "Ex Conjoint Louise QUESADA"}, {"id": 8, "nom": "BLAGNAC", "prenom": "Laurianne", "tel": "06 22 08 35 62", "ville": "Niort", "profession": "Urgentiste", "reco": "Poonam LOLL", "statut": "Contact", "commentaires": ""}, {"id": 9, "nom": "PERREIRA", "prenom": "Lucie", "tel": "06 89 23 36 41", "ville": "Poitiers", "profession": "Pharmacien", "reco": "Louise QUESADA", "statut": "Contact", "commentaires": ""}, {"id": 10, "nom": "THOMAS", "prenom": "Axel", "tel": "06 80 71 59 36", "ville": "La Rochelle", "profession": "Maladie Infectieuse", "reco": "Louise QUESADA", "statut": "Contact", "commentaires": ""}, {"id": 11, "nom": "BOBIN", "prenom": "Jean-Hugues", "tel": "06 07 90 66 53", "ville": "Fontenay Le Comte", "profession": "Retraité", "reco": "Mathieu BOBIN", "statut": "Contact", "commentaires": "Elisabeth BOBIN 06 77 84 66 56"}, {"id": 12, "nom": "MISSEMER", "prenom": "Julie", "tel": "06 10 37 29 63", "ville": "Saintes", "profession": "Gynécologue", "reco": "Perrine AUZON", "statut": "Contact", "commentaires": ""}, {"id": 13, "nom": "FILIPELLI", "prenom": "Clément", "tel": "06 83 96 70 81", "ville": "Phartenay", "profession": "Pharmacien", "reco": "Marion BRULIN", "statut": "Contact", "commentaires": ""}, {"id": 14, "nom": "THIAUDIERE", "prenom": "Valentine", "tel": "06 95 55 31 80", "ville": "Poitiers", "profession": "Préparatrice pharma", "reco": "Marion BRULIN", "statut": "Contact", "commentaires": ""}, {"id": 15, "nom": "RIEDL", "prenom": "Cécilia", "tel": "06 62 29 27 93", "ville": "Saintes", "profession": "Gynécologue", "reco": "Perrine AUZON", "statut": "Contact", "commentaires": ""}, {"id": 16, "nom": "AMBIT", "prenom": "Quentin", "tel": "06 03 52 70 71", "ville": "Poitiers", "profession": "Radiologue", "reco": "Alexandre SOL", "statut": "Contact", "commentaires": ""}, {"id": 17, "nom": "BARTHES", "prenom": "Jean", "tel": "06 03 50 38 50", "ville": "Bordeaux", "profession": "Informatique", "reco": "Antoine DOMBLIDES", "statut": "Contact", "commentaires": "Travail au CHU"}, {"id": 18, "nom": "RENAUDON", "prenom": "Jean-Pierre", "tel": "07 81 66 49 36", "ville": "Sable d'Olonne", "profession": "Conseiller Intersport", "reco": "Louise QUESADA", "statut": "Contact", "commentaires": ""}, {"id": 19, "nom": "MUSZALSKY", "prenom": "Anna", "tel": "06 52 80 99 91", "ville": "Poitiers", "profession": "Ophtalmologue", "reco": "Brahim BARNI", "statut": "Contact", "commentaires": ""}, {"id": 20, "nom": "CHITOU", "prenom": "Arsin", "tel": "06 52 25 42 46", "ville": "Poitiers", "profession": "Pharmacien", "reco": "Aras CHITOU", "statut": "Contact", "commentaires": ""}, {"id": 21, "nom": "THOMASSEAU", "prenom": "Alexandre", "tel": "06 33 59 58 81", "ville": "Niort", "profession": "Anesthesiste", "reco": "Charlotte BEZARD", "statut": "Contact", "commentaires": ""}, {"id": 22, "nom": "TOULMOUTINE", "prenom": "Ines", "tel": "06 72 96 82 21", "ville": "Poitiers", "profession": "Radiologue", "reco": "Denis VASYLIEV", "statut": "Contact", "commentaires": ""}, {"id": 23, "nom": "COUTANT", "prenom": "Marie", "tel": "07 81 14 05 74", "ville": "Poitiers", "profession": "Radiologue", "reco": "Denis VASYLIEV", "statut": "Contact", "commentaires": ""}, {"id": 24, "nom": "PIERRE DE MANDIARGUES", "prenom": "Théodore", "tel": "06 37 68 06 70", "ville": "Poitiers", "profession": "Radiologue", "reco": "Denis VASYLIEV", "statut": "Contact", "commentaires": ""}, {"id": 25, "nom": "ROUSILLE", "prenom": "Pauline", "tel": "06 89 23 22 79", "ville": "Niort", "profession": "Radiothérapeute", "reco": "Johann MARCEL", "statut": "Contact", "commentaires": ""}, {"id": 26, "nom": "NAMOUN", "prenom": "Rihad", "tel": "06 62 14 74 02", "ville": "Niort", "profession": "Radiothérapeute", "reco": "Johann MARCEL", "statut": "Contact", "commentaires": ""}, {"id": 27, "nom": "RAYMOND", "prenom": "Ludivine", "tel": "06 50 01 36 99", "ville": "Sainte-Soulle", "profession": "Chef d'entreprise", "reco": "Mélanie CHAIGNEAU", "statut": "Rappeler", "commentaires": "Conjoint Sébastien Pinocheau (Colombus, Yoghurt Factory) Rpl après vacances paques"}, {"id": 28, "nom": "DUGANSZICK", "prenom": "Mélissa", "tel": "06 95 44 90 25", "ville": "Sainte-Soulle", "profession": "Visiteuse Médicale", "reco": "Mélanie CHAIGNEAU", "statut": "Rappeler", "commentaires": "Conjoint (Dzenko) Artisan rappeler fin d'année 2026"}, {"id": 29, "nom": "RINEAU", "prenom": "Justine", "tel": "06 80 81 18 48", "ville": "Sainte-Soulle", "profession": "Ostéopathe", "reco": "Mélanie CHAIGNEAU", "statut": "Rappeler", "commentaires": "Rpl après vacances paques"}, {"id": 30, "nom": "DUBIN", "prenom": "Paul", "tel": "06 06 57 64 20", "ville": "La Rochelle", "profession": "Urgentiste", "reco": "Poonam LOLL", "statut": "Rappeler", "commentaires": "Travail à Niort - Vu en R1 AR en septembre 2026"}, {"id": 31, "nom": "BEN KADDOUR", "prenom": "Kamilia", "tel": "06 67 78 92 94", "ville": "Royan", "profession": "Radiologue", "reco": "Lisette MANUALU", "statut": "Rappeler", "commentaires": "RDV posé mais pas vu"}, {"id": 32, "nom": "TARNAUD", "prenom": "Julie", "tel": "06 84 75 52 24", "ville": "Poitiers", "profession": "Ophtalmologue", "reco": "Maxime PERREIRA LIMA", "statut": "Rappeler", "commentaires": "Eu doit me rappeler"}, {"id": 33, "nom": "LAURENT", "prenom": "Alexis", "tel": "06 71 53 83 94", "ville": "La Rochelle", "profession": "Anesthésiste", "reco": "Vincent MENGUY", "statut": "Rappeler", "commentaires": "Intaller en Mars 2026 (Rappeler en Octobre / novembre)"}, {"id": 34, "nom": "HARDOY", "prenom": "Hugo", "tel": "06 37 58 90 36", "ville": "Poitiers", "profession": "Radiologue", "reco": "Laurie CALDERON", "statut": "Rappeler", "commentaires": "Rappeler fin novembre (nouveau semestre)"}, {"id": 35, "nom": "GRABIET", "prenom": "Louise", "tel": "06 77 74 22 39", "ville": "Poitiers", "profession": "Kiné", "reco": "Léa BARBIER", "statut": "Rappeler", "commentaires": "Appeler début juillet (plus calme)"}, {"id": 36, "nom": "YASMINEK", "prenom": "Rayan", "tel": "06 70 86 90 64", "ville": "Paris", "profession": "Artiste Peintre", "reco": "Brahim BARNI", "statut": "Rappeler", "commentaires": "Rappeler septembre 2026"}, {"id": 37, "nom": "BOUDERBALA", "prenom": "Yanis", "tel": "06 03 67 69 04", "ville": "Montpellier", "profession": "Allergologue", "reco": "Brahim BARNI", "statut": "Rappeler", "commentaires": "Envoyer SMS fin Aout pour trouver créneau"}, {"id": 38, "nom": "DEVANNE", "prenom": "Florine", "tel": "07 82 56 52 40", "ville": "Royan", "profession": "Pharmacien", "reco": "Louise QUESADA", "statut": "Rappeler", "commentaires": "Rappeler en aout 2026"}, {"id": 39, "nom": "LARBI BOUARMANE", "prenom": "Amina", "tel": "07 70 24 72 49", "ville": "Poitiers", "profession": "Gastro-Entérologue", "reco": "Louise QUESADA", "statut": "Rappeler", "commentaires": "Rappeler fin 2026"}, {"id": 40, "nom": "RENARD", "prenom": "Marie-Sophie", "tel": "07 81 66 49 36", "ville": "Nantes", "profession": "Pharmacien", "reco": "Louise QUESADA", "statut": "Rappeler", "commentaires": "Rappeler en septembre"}, {"id": 41, "nom": "ALESSANDRI", "prenom": "Pauline", "tel": "06 16 69 18 72", "ville": "Bordeaux", "profession": "Chirurgien Plastique", "reco": "Manon PAYET-LEGENTIL", "statut": "Rappeler", "commentaires": "Travail sur Libourne (rappeler fin aout) plutôt sympa"}, {"id": 42, "nom": "BALLON", "prenom": "Clothilde", "tel": "06 23 81 95 16", "ville": "Poitiers", "profession": "Infirmière", "reco": "Louise QUESADA", "statut": "Rappeler", "commentaires": "Congé maternité (Rappeler en sept accouche en oct)"}, {"id": 43, "nom": "RIGAULT", "prenom": "Emilien", "tel": "06 44 12 77 85", "ville": "La Rochelle", "profession": "Radiologue", "reco": "Denis VASYLIEV", "statut": "Rappeler", "commentaires": ""}, {"id": 44, "nom": "MARZOUGUI", "prenom": "Mourad", "tel": "06 82 03 56 62", "ville": "Niort", "profession": "Urgentiste", "reco": "Anthony BORT", "statut": "RDV posé", "commentaires": ""}, {"id": 45, "nom": "BAUVAREL", "prenom": "Barnabet", "tel": "07 60 87 98 19", "ville": "Nantes", "profession": "Gynécologue", "reco": "Perrine AUZON", "statut": "RDV posé", "commentaires": ""}, {"id": 46, "nom": "POIRIER", "prenom": "Pierre", "tel": "06 80 12 26 54", "ville": "Poitiers", "profession": "Urgentiste", "reco": "Maëlle MORVAN", "statut": "R1 fait", "commentaires": "Rappeler à la rentrée aout"}, {"id": 47, "nom": "BORT", "prenom": "Anthony", "tel": "06 44 06 90 26", "ville": "Niort", "profession": "Urgentiste", "reco": "Poonam LOLL", "statut": "R1 fait", "commentaires": ""}, {"id": 48, "nom": "COURILLEAU", "prenom": "Nicolas", "tel": "06 68 92 57 64", "ville": "Poitiers", "profession": "Urgentiste", "reco": "Vanessa JOURJON", "statut": "R1 fait", "commentaires": "RDV Téléphonique"}, {"id": 49, "nom": "DAL ZOVO ", "prenom": "Raphael", "tel": "06 19 43 27 44", "ville": "Royan", "profession": "Radiologue", "reco": "Lisette MANUALU", "statut": "R1 fait", "commentaires": "Présentation faite (AR peut-être fin d'année 2026)"}, {"id": 50, "nom": "BRULIN", "prenom": "Marion", "tel": "07 78 98 71 47", "ville": "Poitiers", "profession": "Préparatrice pharma", "reco": "Louise QUESADA", "statut": "R1 fait", "commentaires": "Conjoint Pharmacien"}, {"id": 51, "nom": "DAVID", "prenom": "Anthony", "tel": "06 12 66 14 63", "ville": "Poitiers", "profession": "Chirurgien Viscéral", "reco": "Cynthia DUCAMP", "statut": "R1 fait", "commentaires": ""}, {"id": 52, "nom": "SCHULTZ", "prenom": "Hugo", "tel": "06 18 59 15 15", "ville": "Poitiers", "profession": "Ophtalmologue", "reco": "Gabrielle GONZALVES", "statut": "R1 fait", "commentaires": ""}, {"id": 53, "nom": "QUEÏNNEC", "prenom": "Thibault", "tel": "06 29 99 20 79", "ville": "Pont l'Abbé", "profession": "Dentiste", "reco": "Kamel CHELLALI", "statut": "R1 fait", "commentaires": ""}, {"id": 54, "nom": "GUILBOT", "prenom": "Mélissa", "tel": "06 40 23 40 27", "ville": "Niort", "profession": "Urgentiste", "reco": "Marie CHABOISSEAU", "statut": "R1 fait", "commentaires": ""}, {"id": 55, "nom": "ROUX", "prenom": "Niels", "tel": "06 31 68 84 10", "ville": "Rouen", "profession": "Informaticien", "reco": "Côme ROUX", "statut": "R1 fait", "commentaires": ""}, {"id": 56, "nom": "NOGUERO", "prenom": "Antoine", "tel": "06 32 71 93 80", "ville": "Poitiers", "profession": "Radiologue", "reco": "Denis VASYLIEV", "statut": "R1 fait", "commentaires": ""}, {"id": 57, "nom": "ECAULT", "prenom": "Jean-François", "tel": "07 68 71 36 35", "ville": "Vaux-Sur-Mer", "profession": "Retraité", "reco": "Leslie PLAUT", "statut": "R2 fait", "commentaires": ""}, {"id": 58, "nom": "PERREIRA-LIMA", "prenom": "Maxime", "tel": "06 87 88 13 33", "ville": "Poitiers", "profession": "Radiologue", "reco": "Philippe BEYSSEN", "statut": "R2 fait", "commentaires": "Rappeler début mai"}, {"id": 59, "nom": "CALDERON", "prenom": "Laurène", "tel": "06 32 91 46 85", "ville": "Poitiers", "profession": "Radiologue", "reco": "Maxime PERREIRA LIMA", "statut": "R2 fait", "commentaires": "Rappeler Novembre 2026"}, {"id": 60, "nom": "ALFAROUHA", "prenom": "Fadi", "tel": "06 95 22 85 55", "ville": "Poitiers", "profession": "Pharmaceutique", "reco": "Louise QUESADA", "statut": "R2 fait", "commentaires": "Rappeler à la rentrée de septembre"}, {"id": 61, "nom": "JACQUEMIN", "prenom": "Emilie", "tel": "07 63 50 56 24", "ville": "Nantes", "profession": "Kiné", "reco": "Léa BARBIER", "statut": "R2 fait", "commentaires": ""}, {"id": 62, "nom": "PAYET-LEGENTIL", "prenom": "Manon", "tel": "07 66 83 87 07", "ville": "Poitiers", "profession": "Médecin Généraliste", "reco": "Niels TABAILLOUX", "statut": "R3 fait", "commentaires": ""}, {"id": 63, "nom": "QUESADA", "prenom": "Louise", "tel": "06 20 78 90 39", "ville": "Poitiers", "profession": "Pharmacien", "reco": "Florian MONTAGNE", "statut": "Signé", "commentaires": "Conjointe Jérémy DELRIEUX"}, {"id": 64, "nom": "COUTAND", "prenom": "Claire", "tel": "06 82 34 55 78", "ville": "Nantes", "profession": "ORL", "reco": "Julien PACLOT", "statut": "Signé", "commentaires": ""}, {"id": 65, "nom": "CHABOISSEAU", "prenom": "Marie", "tel": "06 74 55 13 03", "ville": "Niort", "profession": "Urgentiste", "reco": "Poonam LOLL", "statut": "Signé", "commentaires": ""}, {"id": 66, "nom": "MABIT", "prenom": "Leo", "tel": "06 83 79 43 33", "ville": "Poitiers", "profession": "Radiologue", "reco": "Maxime PERREIRA LIMA", "statut": "Signé", "commentaires": "Polyclinique"}, {"id": 67, "nom": "JEAN-BAPTISTE", "prenom": "Yannis", "tel": "06 58 32 61 08", "ville": "Poitiers", "profession": "Ophtalmologue", "reco": "Gabrielle GONZALVES", "statut": "Signé", "commentaires": ""}, {"id": 68, "nom": "VASILYEV", "prenom": "Denis", "tel": "07 86 97 74 91", "ville": "Poitiers", "profession": "Radiologue", "reco": "Alexandre SOL", "statut": "Signé", "commentaires": ""}, {"id": 69, "nom": "SOL", "prenom": "Alexandre", "tel": "06 36 29 17 20", "ville": "Poitiers", "profession": "Radiologue", "reco": "Maxime PERREIRA LIMA", "statut": "Signé", "commentaires": "Polyclinique"}, {"id": 70, "nom": "CHITOU", "prenom": "Aras", "tel": "06 52 25 08 09", "ville": "Poitiers", "profession": "Pharmaceutique", "reco": "Louise QUESADA", "statut": "Signé", "commentaires": ""}, {"id": 71, "nom": "BEZARD", "prenom": "Charlotte", "tel": "06 70 72 80 58", "ville": "La Rochelle", "profession": "Chirurgien Vascalaire", "reco": "Martin MEROUZE", "statut": "Signé", "commentaires": ""}, {"id": 72, "nom": "BARNI", "prenom": "Brahim", "tel": "06 29 56 51 33", "ville": "Poitiers", "profession": "Radiologue", "reco": "Alexandre SOL", "statut": "Signé", "commentaires": ""}, {"id": 73, "nom": "MANTEAU", "prenom": "Philippe", "tel": "06 62 58 71 54", "ville": "Vix", "profession": "Retraité", "reco": "Hélène MANTEAU", "statut": "Refus", "commentaires": "Déjà organisé mais très sympa"}, {"id": 74, "nom": "CHAUVIN", "prenom": "Antoine", "tel": "06 29 56 34 81", "ville": "Poitiers", "profession": "Urgentiste", "reco": "Maëlle MORVAN", "statut": "Refus", "commentaires": "Suivi par un cabinet indépendant"}, {"id": 75, "nom": "MARTY", "prenom": "Jean-Eude", "tel": "06 72 44 80 26", "ville": "Poitiers", "profession": "Urgentiste", "reco": "Maëlle MORVAN", "statut": "Refus", "commentaires": "Déjà suivi par un ami"}, {"id": 76, "nom": "BOYER", "prenom": "Aurélie", "tel": "07 63 03 10 06", "ville": "Bordeaux", "profession": "Neurologue", "reco": "Mariam ERRAHIMI", "statut": "Refus", "commentaires": "Déjà cliente du cabinet"}, {"id": 77, "nom": "GERSSEN CHERDIAU", "prenom": "Hélène", "tel": "06 14 75 15 66", "ville": "Arcachon", "profession": "Chirurgien Viscéral", "reco": "Loic GAUDUCHON", "statut": "Refus", "commentaires": "Suivie par Predictis"}, {"id": 78, "nom": "DRUGEON", "prenom": "Bertrand", "tel": "06 15 13 92 91", "ville": "Poitiers", "profession": "Urgentiste", "reco": "Vanessa JOURJON", "statut": "Refus", "commentaires": "Pas intéresser car va quitter le pays (vu en R1)"}, {"id": 79, "nom": "BOUTEILLE", "prenom": "Cécilia", "tel": "06 59 88 92 73", "ville": "Nantes", "profession": "Urologue", "reco": "Julien PACLOT", "statut": "Refus", "commentaires": "Déjà vu quelqu'un du cabinet"}, {"id": 80, "nom": "CAMBEAU", "prenom": "Mélina", "tel": "06 32 15 87 75", "ville": "Poitiers", "profession": "Radiologue", "reco": "Philippe BEYSSEN", "statut": "Refus", "commentaires": "Finalement annulé le RDV"}, {"id": 81, "nom": "DEPAIRE", "prenom": "Lucas", "tel": "06 42 86 17 85", "ville": "Angoulême", "profession": "Radiologue", "reco": "Philippe BEYSSEN", "statut": "Refus", "commentaires": "Déjà conseiller, un peu fermé"}, {"id": 82, "nom": "PLOUVIEZ", "prenom": "Quentin", "tel": "06 29 54 64 40", "ville": "La Rochelle", "profession": "Anesthésiste", "reco": "Vincent MENGUY", "statut": "Refus", "commentaires": "\"Pas besoin\""}, {"id": 83, "nom": "MALLET", "prenom": "Karl", "tel": "06 38 67 02 53", "ville": "Nantes", "profession": "Dentiste", "reco": "Paul-Emile ALAIN", "statut": "Refus", "commentaires": ""}, {"id": 84, "nom": "KACI", "prenom": "Benjamin", "tel": "06 68 29 15 39", "ville": "Niort", "profession": "Pharmacien", "reco": "Louise QUESADA", "statut": "Refus", "commentaires": ""}, {"id": 85, "nom": "BESSON", "prenom": "Simon", "tel": "07 62 18 78 85", "ville": "La Rochelle", "profession": "Pharmacien", "reco": "Louise QUESADA", "statut": "Refus", "commentaires": ""}, {"id": 86, "nom": "TABERNE", "prenom": "Romain", "tel": "06 61 85 51 99", "ville": "Arès", "profession": "Orthopédiste", "reco": "Hélène GERSSEN", "statut": "Refus", "commentaires": "R1 fait mais ne veut pas plus"}, {"id": 87, "nom": "NGUYEN", "prenom": "Clémente-Han", "tel": "06 78 94 15 19", "ville": "Poitiers", "profession": "Infirmière", "reco": "Niels TABAILLOUX", "statut": "Refus", "commentaires": "Pas interessant"}, {"id": 88, "nom": "DIACK", "prenom": "Bineta", "tel": "06 66 23 15 01", "ville": "Saintes", "profession": "Gynécologue", "reco": "Perrine AUZON", "statut": "Refus", "commentaires": "Cliente Merwan"}, {"id": 89, "nom": "CHARLES", "prenom": "Damien", "tel": "07 67 75 52 40", "ville": "La Rochelle", "profession": "Médecin du Travail", "reco": "Mélanie CHAIGNEAU", "statut": "Refus", "commentaires": "Déjà client"}, {"id": 90, "nom": "LAZARD", "prenom": "Louise", "tel": "06 45 78 35 69", "ville": "Poitiers", "profession": "Urgentiste", "reco": "Marie CHABOISSEAU", "statut": "Refus", "commentaires": "Rappeler jeudi 21 mai"}, {"id": 91, "nom": "MOUCHEL", "prenom": "François", "tel": "06 70 56 48 46", "ville": "Sainte-Soulle", "profession": "Directeur Technique", "reco": "Mélanie CHAIGNEAU", "statut": "Refus", "commentaires": ""}, {"id": 92, "nom": "BARRIERE", "prenom": "Tom", "tel": "06 46 81 09 24", "ville": "Poitiers", "profession": "Ophtalmologue", "reco": "Gabrielle GONZALVES", "statut": "Refus", "commentaires": "Déjà client"}, {"id": 93, "nom": "KADIMI", "prenom": "Nabil", "tel": "07 83 61 82 72", "ville": "Poitiers", "profession": "Ophtalmologue", "reco": "Gabrielle GONZALVES", "statut": "Refus", "commentaires": "Rappeler retour vacances Corse"}, {"id": 94, "nom": "BOUTET", "prenom": "Quentin", "tel": "06 37 24 32 42", "ville": "Chatellerault", "profession": "Pharmacien", "reco": "Louise QUESADA", "statut": "Refus", "commentaires": "quentin_boutet@hotmail.fr  (proposition, mercedi plutôt en juin)"}, {"id": 95, "nom": "RENAUDON", "prenom": "Amélie", "tel": "06 63 82 95 82", "ville": "Toulouse", "profession": "Sage-Femme", "reco": "Louise QUESADA", "statut": "Refus", "commentaires": "Déjà cliente "}];
+
+let state = {
+  contacts: [],
+  activeStatus: "Contact",
+  search: "",
+  editingId: null
+};
+
+const STORAGE_KEY = "recos-contacts-v1"; // conservé comme clé de secours locale (hors-ligne)
+
+// ---- FIREBASE ----
+const firebaseConfig = {
+  apiKey: "AIzaSyDJVvlWIaIjeY3mCaMbTofrXvKrZKBX_2g",
+  authDomain: "reco-app-da0ce.firebaseapp.com",
+  projectId: "reco-app-da0ce",
+  storageBucket: "reco-app-da0ce.firebasestorage.app",
+  messagingSenderId: "783377738587",
+  appId: "1:783377738587:web:c2010bd5764282af52c87e"
+};
+let db = null, auth = null, docRef = null;
+if(typeof firebase !== 'undefined'){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  auth = firebase.auth();
+  docRef = db.collection('app').doc('recos-data');
+}
+
+let firestoreReady = false;
+let applyingRemoteUpdate = false;
+
+function loadData(){
+  if(typeof firebase === 'undefined'){
+    // le SDK Firebase n'a pas pu se charger (bloqué par le réseau/l'aperçu) :
+    // on bascule directement sur la copie locale pour ne pas laisser l'écran vide
+    console.error("Firebase SDK non chargé");
+    showToast("Mode hors-ligne (Firebase indisponible)");
+    loadLocalFallback();
+    return;
+  }
+  auth.signInAnonymously().catch(err=>{
+    console.error("Connexion Firebase impossible", err);
+    showToast("Connexion cloud impossible — mode hors-ligne");
+    loadLocalFallback();
+  });
+
+  // si Firestore ne répond pas assez vite (pas de réseau, etc.), on affiche
+  // quand même les données locales pour ne pas laisser l'écran vide
+  setTimeout(loadLocalFallback, 4000);
+
+  auth.onAuthStateChanged(user=>{
+    if(!user) return;
+    // écoute en temps réel : toute modif sur un autre appareil arrive ici automatiquement
+    docRef.onSnapshot(snap=>{
+      firestoreReady = true;
+      if(snap.exists && snap.data().contacts){
+        applyingRemoteUpdate = true;
+        state.contacts = snap.data().contacts;
+        applyingRemoteUpdate = false;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.contacts)); // copie hors-ligne
+        render();
+        updateNotifBtnUI();
+        checkDueNotifications();
+      } else {
+        // première utilisation : on amorce avec les données de départ
+        state.contacts = SEED;
+        persist();
+        render();
+      }
+    }, err=>{
+      console.error("Erreur de synchronisation Firebase", err);
+      showToast("Synchronisation interrompue — mode hors-ligne");
+      loadLocalFallback();
+    });
+  });
+}
+
+function loadLocalFallback(){
+  if(firestoreReady) return; // Firestore a fini par répondre, pas besoin du secours local
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    state.contacts = raw ? JSON.parse(raw) : SEED;
+  }catch(e){
+    state.contacts = SEED;
+  }
+  render();
+}
+
+async function persist(){
+  if(applyingRemoteUpdate) return; // on ne renvoie pas ce qu'on vient de recevoir
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.contacts)); // toujours garder une copie locale
+  try{
+    await docRef.set({ contacts: state.contacts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  }catch(e){
+    console.error("Sauvegarde cloud impossible", e);
+    showToast("Sauvegarde cloud impossible — réessai automatique");
+    setTimeout(persist, 3000);
+  }
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1600);
+}
+
+function initials(nom, prenom){
+  const a = (prenom||'').trim()[0] || '';
+  const b = (nom||'').trim()[0] || '';
+  return (a+b).toUpperCase() || '?';
+}
+
+function isDueTodayOrOverdue(c){
+  if(!c.rappel_date) return false;
+  return c.rappel_date <= todayISO();
+}
+
+function renderTabs(){
+  const wrap = document.getElementById('tabs');
+  wrap.innerHTML = '';
+
+  const dueCount = state.contacts.filter(isDueTodayOrOverdue).length;
+  const todayTab = document.createElement('div');
+  todayTab.className = 'tab today-tab' + (state.activeStatus==='__TODAY__' ? ' active' : '');
+  todayTab.innerHTML = `🔔 Aujourd'hui <span class="n">${dueCount}</span>`;
+  todayTab.onclick = ()=>{ state.activeStatus = '__TODAY__'; render(); };
+  wrap.appendChild(todayTab);
+
+  const mapTab = document.createElement('div');
+  mapTab.className = 'tab' + (state.activeStatus==='__MAP__' ? ' active' : '');
+  mapTab.innerHTML = `🗺️ Carte`;
+  mapTab.onclick = ()=>{ state.activeStatus = '__MAP__'; render(); };
+  wrap.appendChild(mapTab);
+
+  STATUSES.forEach(s=>{
+    const count = state.contacts.filter(c=>c.statut===s).length;
+    const el = document.createElement('div');
+    el.className = 'tab' + (state.activeStatus===s ? ' active' : '');
+    el.innerHTML = `${s} <span class="n">${count}</span>`;
+    el.onclick = ()=>{ state.activeStatus = s; render(); };
+    wrap.appendChild(el);
+  });
+}
+
+function renderTally(){
+  document.getElementById('tally').textContent = state.contacts.length + ' contacts';
+}
+
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function rappelInfo(c){
+  if(!c.rappel_date) return null;
+  const today = todayISO();
+  if(c.rappel_date < today) return {cls:'overdue', label:'En retard · ' + formatDateFr(c.rappel_date)};
+  if(c.rappel_date === today) return {cls:'today', label:"Aujourd'hui"};
+  return {cls:'upcoming', label: formatDateFr(c.rappel_date)};
+}
+
+function formatDateFr(iso){
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function matchesSearch(c, q){
+  if(!q) return true;
+  q = q.toLowerCase();
+  return [c.nom,c.prenom,c.ville,c.profession,c.reco,c.commentaires].join(' ').toLowerCase().includes(q);
+}
+
+function renderList(){
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  const isTodayView = state.activeStatus === '__TODAY__';
+  const items = state.contacts
+    .filter(c => (isTodayView ? isDueTodayOrOverdue(c) : c.statut === state.activeStatus) && matchesSearch(c, state.search))
+    .sort((a,b)=>{
+      const ar = a.rappel_date || '9999-99-99';
+      const br = b.rappel_date || '9999-99-99';
+      if(ar !== br) return ar.localeCompare(br);
+      return (a.nom||'').localeCompare(b.nom||'');
+    });
+
+  if(items.length === 0){
+    const emptyMsg = isTodayView ? "Aucun rappel en attente. Bien joué !" : "Rien ici pour l'instant";
+    const emptySub = isTodayView ? "Les contacts avec une date de rappel dépassée ou du jour apparaîtront ici." : 'Ajoutez un contact avec le bouton +.';
+    list.innerHTML = `<div class="empty">
+      <div class="glyph">${state.search ? '🔍' : '✦'}</div>
+      <div class="display">${state.search ? 'Aucun résultat' : emptyMsg}</div>
+      <div>${state.search ? 'Essayez un autre terme de recherche.' : emptySub}</div>
+    </div>`;
+    return;
+  }
+
+  items.forEach(c=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    const telHref = (c.tel||'').replace(/\s+/g,'');
+    const ri = rappelInfo(c);
+    card.innerHTML = `
+      <div class="avatar">${initials(c.nom,c.prenom)}</div>
+      <div class="body">
+        <div class="row1">
+          <div class="name">${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}</div>
+          <div class="ville">${escapeHtml(c.ville||'')}</div>
+        </div>
+        <div class="profession">${escapeHtml(c.profession||'')}${isTodayView ? ` · <span style="color:var(--ink-soft)">${escapeHtml(c.statut)}</span>` : ''}</div>
+        ${c.tel ? `<a class="phone-line" href="tel:${telHref}" onclick="event.stopPropagation()">📞 ${escapeHtml(c.tel)}</a>` : ''}
+        ${c.reco ? `<div class="reco">↳ reco. ${escapeHtml(c.reco)}</div>` : ''}
+        ${c.commentaires ? `<div class="comment">${escapeHtml(c.commentaires)}</div>` : ''}
+        ${ri ? `<div class="rappel-badge ${ri.cls}">⏰ ${ri.label}</div>` : ''}
+      </div>
+      ${c.tel ? `<a class="call-btn" href="tel:${telHref}" onclick="event.stopPropagation()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </a>` : ''}
+    `;
+    card.onclick = ()=> openSheet(c.id);
+    list.appendChild(card);
+  });
+}
+
+function escapeHtml(s){
+  if(!s) return '';
+  return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function render(){
+  renderTabs();
+  renderTally();
+  if(state.activeStatus === '__MAP__'){
+    document.getElementById('list').style.display = 'none';
+    document.querySelector('.fab').style.display = 'none';
+    renderMap();
+  } else {
+    document.getElementById('list').style.display = '';
+    document.querySelector('.fab').style.display = 'flex';
+    hideMap();
+    renderList();
+  }
+}
+
+document.getElementById('search').addEventListener('input', (e)=>{
+  state.search = e.target.value;
+  renderList();
+});
+
+// SHEET LOGIC
+const overlay = document.getElementById('overlay');
+let pickedStatus = "Contact";
+
+function renderStatusPicker(){
+  const wrap = document.getElementById('statusPicker');
+  wrap.innerHTML = '';
+  STATUSES.forEach(s=>{
+    const chip = document.createElement('div');
+    chip.className = 'status-chip' + (pickedStatus===s ? ' sel' : '');
+    chip.textContent = s;
+    chip.onclick = ()=>{ pickedStatus = s; renderStatusPicker(); };
+    wrap.appendChild(chip);
+  });
+}
+
+function openSheet(id){
+  if(leafletMap) leafletMap.closePopup();
+  state.editingId = id || null;
+  const c = id ? state.contacts.find(x=>x.id===id) : null;
+
+  document.getElementById('sheetTitle').textContent = c ? `${c.prenom} ${c.nom}` : 'Nouveau contact';
+  document.getElementById('f_nom').value = c ? c.nom : '';
+  document.getElementById('f_prenom').value = c ? c.prenom : '';
+  document.getElementById('f_tel').value = c ? c.tel : '';
+  updateCallInlineBtn();
+  document.getElementById('f_ville').value = c ? c.ville : '';
+  document.getElementById('f_profession').value = c ? c.profession : '';
+  document.getElementById('f_reco').value = c ? c.reco : '';
+  document.getElementById('f_rappel_date').value = c ? (c.rappel_date || '') : '';
+  document.getElementById('f_commentaires').value = c ? c.commentaires : '';
+  pickedStatus = c ? c.statut : (state.activeStatus === '__TODAY__' ? 'Contact' : state.activeStatus);
+  renderStatusPicker();
+
+  document.getElementById('deleteBtn').style.display = c ? 'block' : 'none';
+  overlay.classList.add('open');
+}
+
+function closeSheet(){
+  overlay.classList.remove('open');
+}
+
+document.getElementById('fabAdd').onclick = ()=> openSheet(null);
+document.getElementById('closeSheet').onclick = closeSheet;
+overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeSheet(); });
+
+document.getElementById('saveBtn').onclick = async ()=>{
+  const nom = document.getElementById('f_nom').value.trim();
+  const prenom = document.getElementById('f_prenom').value.trim();
+  if(!nom && !prenom){
+    showToast("Merci d'indiquer au moins un nom");
+    return;
+  }
+  const data = {
+    nom, prenom,
+    tel: document.getElementById('f_tel').value.trim(),
+    ville: document.getElementById('f_ville').value.trim(),
+    profession: document.getElementById('f_profession').value.trim(),
+    reco: document.getElementById('f_reco').value.trim(),
+    rappel_date: document.getElementById('f_rappel_date').value || null,
+    commentaires: document.getElementById('f_commentaires').value.trim(),
+    statut: pickedStatus
+  };
+
+  if(state.editingId){
+    const idx = state.contacts.findIndex(c=>c.id===state.editingId);
+    state.contacts[idx] = {...state.contacts[idx], ...data};
+    showToast("Contact mis à jour");
+  } else {
+    const nextId = state.contacts.length ? Math.max(...state.contacts.map(c=>c.id))+1 : 1;
+    state.contacts.push({ id: nextId, ...data });
+    showToast("Contact ajouté");
+  }
+  // reste sur la vue "Aujourd'hui" si c'est là qu'on travaillait, sinon bascule
+  // vers l'onglet du statut sauvegardé
+  if(state.activeStatus !== '__TODAY__'){
+    state.activeStatus = pickedStatus;
+  }
+  persist();
+  closeSheet();
+  render();
+};
+
+document.getElementById('deleteBtn').onclick = async ()=>{
+  if(!state.editingId) return;
+  if(!confirm('Supprimer ce contact ?')) return;
+  state.contacts = state.contacts.filter(c=>c.id !== state.editingId);
+  persist();
+  closeSheet();
+  render();
+  showToast("Contact supprimé");
+};
+
+// ---- APPEL DIRECT DANS LA FICHE ----
+function updateCallInlineBtn(){
+  const tel = document.getElementById('f_tel').value.trim();
+  const btn = document.getElementById('callInlineBtn');
+  if(tel){
+    btn.href = 'tel:' + tel.replace(/\s+/g,'');
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+  } else {
+    btn.href = '#';
+    btn.style.opacity = '0.4';
+    btn.style.pointerEvents = 'none';
+  }
+}
+document.getElementById('f_tel').addEventListener('input', updateCallInlineBtn);
+
+// ---- RECHERCHE : croix pour effacer ----
+const searchInput = document.getElementById('search');
+const searchClear = document.getElementById('searchClear');
+searchInput.addEventListener('input', ()=>{
+  searchClear.style.display = searchInput.value ? 'block' : 'none';
+});
+searchClear.addEventListener('click', ()=>{
+  searchInput.value = '';
+  state.search = '';
+  searchClear.style.display = 'none';
+  renderList();
+  searchInput.focus();
+});
+
+// ---- NOTIFICATIONS (best effort : marche si l'app reste ouverte dans un onglet) ----
+const NOTIF_KEY = 'recos-notif-enabled';
+const notifBtn = document.getElementById('notifBtn');
+
+function updateNotifBtnUI(){
+  const enabled = localStorage.getItem(NOTIF_KEY) === '1' && Notification.permission === 'granted';
+  notifBtn.classList.toggle('on', enabled);
+}
+
+async function toggleNotifications(){
+  if(!('Notification' in window)){
+    showToast("Notifications non disponibles sur ce navigateur");
+    return;
+  }
+  if(Notification.permission !== 'granted'){
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){
+      showToast("Notifications refusées");
+      return;
+    }
+  }
+  const currentlyOn = localStorage.getItem(NOTIF_KEY) === '1';
+  localStorage.setItem(NOTIF_KEY, currentlyOn ? '0' : '1');
+  updateNotifBtnUI();
+  showToast(currentlyOn ? "Notifications désactivées" : "Notifications activées (tant que l'app reste ouverte)");
+  if(!currentlyOn) checkDueNotifications();
+}
+notifBtn.onclick = toggleNotifications;
+
+// ---- SYNCHRO VERS RAPPELS IPHONE (via Claude, en collant la liste) ----
+document.getElementById('syncRemindersBtn').onclick = ()=>{
+  const withDates = state.contacts
+    .filter(c => c.rappel_date)
+    .sort((a,b)=> a.rappel_date.localeCompare(b.rappel_date));
+
+  if(withDates.length === 0){
+    showToast("Aucune date de rappel enregistrée pour l'instant");
+    return;
+  }
+
+  const lines = withDates.map(c =>
+    `${c.prenom} ${c.nom} — ${formatDateFr(c.rappel_date)}${c.tel ? ' — ' + c.tel : ''}`
+  );
+  const text = "Crée-moi ces rappels dans mon app Rappels :\n" + lines.join('\n');
+
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>{
+      showToast("Liste copiée — colle-la à Claude dans le chat");
+    }).catch(()=>{
+      showManualCopyPrompt(text);
+    });
+  } else {
+    showManualCopyPrompt(text);
+  }
+};
+
+function showManualCopyPrompt(text){
+  window.prompt("Copie ce texte et colle-le à Claude dans le chat :", text);
+}
+
+const notifiedToday = new Set();
+function checkDueNotifications(){
+  if(localStorage.getItem(NOTIF_KEY) !== '1') return;
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const due = state.contacts.filter(isDueTodayOrOverdue);
+  due.forEach(c=>{
+    const key = c.id + '-' + todayISO();
+    if(notifiedToday.has(key)) return;
+    notifiedToday.add(key);
+    new Notification('Rappel : ' + c.prenom + ' ' + c.nom, {
+      body: (c.ville ? c.ville + ' · ' : '') + (c.profession || ''),
+      tag: 'reco-' + c.id
+    });
+  });
+}
+// vérifie au chargement et toutes les 30 min si l'app reste ouverte
+setInterval(checkDueNotifications, 30*60*1000);
+
+// ---- CARTE ----
+const CITY_COORDS = {
+  "Angoulême":[45.6486,0.1560], "Arcachon":[44.6597,-1.1683], "Arès":[44.7717,-1.1467],
+  "Bordeaux":[44.8378,-0.5792], "Chatellerault":[46.8167,0.5333], "Fontenay Le Comte":[46.4667,-0.8000],
+  "La Rochelle":[46.1603,-1.1511], "Montpellier":[43.6108,3.8767], "Nantes":[47.2184,-1.5536],
+  "Niort":[46.3239,-0.4587], "Orléans":[47.9029,1.9093], "Paris":[48.8566,2.3522],
+  "Phartenay":[46.6483,-0.2467], "Poitiers":[46.5802,0.3404], "Pont l'Abbé":[47.8667,-4.2167],
+  "Périgueux":[45.1848,0.7217], "Rouen":[49.4432,1.0999], "Royan":[45.6280,-1.0280],
+  "Sable d'Olonne":[46.4966,-1.7833], "Sainte-Soulle":[46.2167,-1.0333], "Saintes":[45.7467,-0.6333],
+  "Toulouse":[43.6047,1.4442], "Vaux-Sur-Mer":[45.6367,-1.0533], "Vix":[46.3667,-0.8667]
+};
+
+let leafletMap = null;
+let mapMarkersLayer = null;
+
+function initMap(){
+  if(leafletMap) return;
+  leafletMap = L.map('mapView', {scrollWheelZoom:true}).setView([46.4, -0.5], 6.3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 18
+  }).addTo(leafletMap);
+  mapMarkersLayer = L.layerGroup().addTo(leafletMap);
+}
+
+function renderMap(){
+  const mapEl = document.getElementById('mapView');
+  mapEl.classList.add('active');
+  initMap();
+  setTimeout(()=> leafletMap.invalidateSize(), 50);
+
+  mapMarkersLayer.clearLayers();
+  const byCity = {};
+  state.contacts.forEach(c=>{
+    if(!c.ville) return;
+    if(!byCity[c.ville]) byCity[c.ville] = [];
+    byCity[c.ville].push(c);
+  });
+
+  const bounds = [];
+  Object.keys(byCity).forEach(ville=>{
+    const coords = CITY_COORDS[ville];
+    if(!coords) return;
+    bounds.push(coords);
+    const contacts = byCity[ville];
+    const popupItems = contacts.slice(0,12).map(c=>
+      `<div class="map-popup-item" onclick="openSheet(${c.id})"><b>${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}</b><br>${escapeHtml(c.profession||'')} · ${escapeHtml(c.statut)}</div>`
+    ).join('');
+    const marker = L.circleMarker(coords, {
+      radius: Math.min(8 + contacts.length, 20),
+      fillColor: '#A9782F', color:'#7A5620', weight:1.5, fillOpacity:0.75
+    });
+    marker.bindPopup(`<b>${escapeHtml(ville)}</b> · ${contacts.length} contact${contacts.length>1?'s':''}<br>${popupItems}`);
+    marker.addTo(mapMarkersLayer);
+  });
+  if(bounds.length) leafletMap.fitBounds(bounds, {padding:[30,30], maxZoom:9});
+}
+
+function hideMap(){
+  document.getElementById('mapView').classList.remove('active');
+}
+
+loadData();
+
+// enregistrement du service worker (installabilité + coquille hors-ligne)
+// seulement utile quand l'app est servie via http(s), pas en fichier local
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
