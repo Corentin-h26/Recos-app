@@ -19,6 +19,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-app-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-firestore-compat.js"></script>
@@ -62,9 +63,10 @@
     padding: calc(18px + env(safe-area-inset-top)) 16px 10px;
   }
   .brand{
-    display:flex; align-items:baseline; justify-content:space-between;
-    margin-bottom:14px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px; gap:8px;
   }
+  .header-actions{display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end;}
   .brand h1{
     font-size: 26px; font-weight:600; letter-spacing:-0.01em; margin:0;
     display:flex; align-items:baseline; gap:8px;
@@ -86,6 +88,16 @@
     font-family:'IBM Plex Sans', sans-serif; font-size:15px; color:var(--ink);
   }
   .search-wrap input::placeholder{color:#A3ABA2;}
+
+  .sort-row{
+    display:flex; align-items:center; gap:8px; margin-top:8px; padding: 0 2px;
+  }
+  .sort-label{font-size:12.5px; color:var(--ink-soft); flex:none;}
+  #sortSelect{
+    font-family:'IBM Plex Sans', sans-serif; font-size:12.5px; color:var(--ink);
+    background:var(--paper-2); border:1px solid var(--line); border-radius:20px;
+    padding:5px 10px; -webkit-appearance:none; appearance:none; cursor:pointer;
+  }
 
   /* TABS (rolodex) */
   .tabs{
@@ -320,17 +332,31 @@
 <header>
   <div class="brand">
     <h1>Recos <span class="tally" id="tally">…</span></h1>
-    <button class="notif-btn" id="notifBtn" title="Activer les notifications de rappel">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-    </button>
-    <button class="notif-btn" id="syncRemindersBtn" title="Copier la liste des rappels pour Rappels iPhone">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    </button>
+    <div class="header-actions">
+      <button class="notif-btn" id="notifBtn" title="Activer les notifications de rappel">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </button>
+      <button class="notif-btn" id="syncRemindersBtn" title="Copier la liste des rappels pour Rappels iPhone">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </button>
+      <button class="notif-btn" id="exportExcelBtn" title="Exporter en Excel (sauvegarde)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+    </div>
   </div>
   <div class="search-wrap">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <input id="search" type="text" placeholder="Chercher un nom, une ville, une reco…">
     <svg id="searchClear" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none; cursor:pointer; flex:none;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+  </div>
+  <div class="sort-row">
+    <span class="sort-label">Trier :</span>
+    <select id="sortSelect">
+      <option value="rappel">Rappel (défaut)</option>
+      <option value="nom">Nom (A → Z)</option>
+      <option value="recent">Ajout : plus récent</option>
+      <option value="ancien">Ajout : plus ancien</option>
+    </select>
   </div>
   <div class="tabs" id="tabs"></div>
 </header>
@@ -400,8 +426,16 @@ let state = {
   contacts: [],
   activeStatus: "Contact",
   search: "",
-  editingId: null
+  editingId: null,
+  sortMode: localStorage.getItem('recos-sort-mode') || 'rappel'
 };
+
+function getCreatedAt(c){
+  // pour les contacts créés avant cette fonctionnalité, on approxime la date
+  // d'ajout via leur id (ordre d'origine du fichier), toujours plus ancien
+  // que les vrais horodatages (bien plus grands) des contacts ajoutés depuis
+  return c.createdAt || (c.id * 1000);
+}
 
 const STORAGE_KEY = "recos-contacts-v1"; // conservé comme clé de secours locale (hors-ligne)
 
@@ -567,18 +601,46 @@ function matchesSearch(c, q){
   return [c.nom,c.prenom,c.ville,c.profession,c.reco,c.commentaires].join(' ').toLowerCase().includes(q);
 }
 
-function renderList(){
-  const list = document.getElementById('list');
-  list.innerHTML = '';
-  const isTodayView = state.activeStatus === '__TODAY__';
-  const items = state.contacts
-    .filter(c => (isTodayView ? isDueTodayOrOverdue(c) : c.statut === state.activeStatus) && matchesSearch(c, state.search))
-    .sort((a,b)=>{
+function sortContacts(list, isTodayView){
+  // la vue "Aujourd'hui" reste toujours triée par urgence, quel que soit le
+  // mode de tri choisi ailleurs — c'est tout l'intérêt de cette vue
+  if(isTodayView){
+    return list.sort((a,b)=>{
       const ar = a.rappel_date || '9999-99-99';
       const br = b.rappel_date || '9999-99-99';
       if(ar !== br) return ar.localeCompare(br);
       return (a.nom||'').localeCompare(b.nom||'');
     });
+  }
+  switch(state.sortMode){
+    case 'nom':
+      return list.sort((a,b)=>{
+        const n = (a.nom||'').localeCompare(b.nom||'');
+        return n !== 0 ? n : (a.prenom||'').localeCompare(b.prenom||'');
+      });
+    case 'recent':
+      return list.sort((a,b)=> getCreatedAt(b) - getCreatedAt(a));
+    case 'ancien':
+      return list.sort((a,b)=> getCreatedAt(a) - getCreatedAt(b));
+    case 'rappel':
+    default:
+      return list.sort((a,b)=>{
+        const ar = a.rappel_date || '9999-99-99';
+        const br = b.rappel_date || '9999-99-99';
+        if(ar !== br) return ar.localeCompare(br);
+        return (a.nom||'').localeCompare(b.nom||'');
+      });
+  }
+}
+
+function renderList(){
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  const isTodayView = state.activeStatus === '__TODAY__';
+  const items = sortContacts(
+    state.contacts.filter(c => (isTodayView ? isDueTodayOrOverdue(c) : c.statut === state.activeStatus) && matchesSearch(c, state.search)),
+    isTodayView
+  );
 
   if(items.length === 0){
     const emptyMsg = isTodayView ? "Aucun rappel en attente. Bien joué !" : "Rien ici pour l'instant";
@@ -626,13 +688,16 @@ function escapeHtml(s){
 function render(){
   renderTabs();
   renderTally();
+  const sortRow = document.querySelector('.sort-row');
   if(state.activeStatus === '__MAP__'){
     document.getElementById('list').style.display = 'none';
     document.querySelector('.fab').style.display = 'none';
+    sortRow.style.display = 'none';
     renderMap();
   } else {
     document.getElementById('list').style.display = '';
     document.querySelector('.fab').style.display = 'flex';
+    sortRow.style.display = state.activeStatus === '__TODAY__' ? 'none' : 'flex';
     hideMap();
     renderList();
   }
@@ -640,6 +705,13 @@ function render(){
 
 document.getElementById('search').addEventListener('input', (e)=>{
   state.search = e.target.value;
+  renderList();
+});
+
+document.getElementById('sortSelect').value = state.sortMode;
+document.getElementById('sortSelect').addEventListener('change', (e)=>{
+  state.sortMode = e.target.value;
+  localStorage.setItem('recos-sort-mode', state.sortMode);
   renderList();
 });
 
@@ -713,7 +785,7 @@ document.getElementById('saveBtn').onclick = async ()=>{
     showToast("Contact mis à jour");
   } else {
     const nextId = state.contacts.length ? Math.max(...state.contacts.map(c=>c.id))+1 : 1;
-    state.contacts.push({ id: nextId, ...data });
+    state.contacts.push({ id: nextId, createdAt: Date.now(), ...data });
     showToast("Contact ajouté");
   }
   // reste sur la vue "Aujourd'hui" si c'est là qu'on travaillait, sinon bascule
