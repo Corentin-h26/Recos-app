@@ -282,6 +282,16 @@
     margin: 4px 16px 16px;
   }
   #mapView.active{display:block;}
+
+  /* DOUBLONS */
+  #dupesView{display:none; padding: 4px 16px 16px;}
+  #dupesView.active{display:block;}
+  .dupe-group{margin-bottom:20px;}
+  .dupe-group-header{
+    font-size:12.5px; font-weight:600; color:var(--rust); margin-bottom:8px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .dupe-group .card{border-color:var(--rust-soft); margin-bottom:8px;}
   .leaflet-popup-content{font-family:'IBM Plex Sans', sans-serif; font-size:13px;}
   .leaflet-popup-content b{font-family:'Fraunces', serif;}
   .map-popup-item{padding:3px 0; border-top:1px solid #eee; cursor:pointer;}
@@ -363,6 +373,7 @@
 
 <main id="list"></main>
 <div id="mapView"></div>
+<div id="dupesView"></div>
 
 <button class="fab" id="fabAdd" aria-label="Ajouter">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -550,6 +561,33 @@ function isDueTodayOrOverdue(c){
   return c.rappel_date <= todayISO();
 }
 
+function normalizeName(nom, prenom){
+  return `${nom||''} ${prenom||''}`
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // enlève les accents
+    .replace(/\s+/g,' ').trim();
+}
+
+function findDuplicateGroups(){
+  const byPhone = {}, byName = {};
+  state.contacts.forEach(c=>{
+    const phoneKey = (c.tel||'').replace(/\D/g,'');
+    if(phoneKey.length >= 8){ (byPhone[phoneKey] = byPhone[phoneKey]||[]).push(c); }
+    const nameKey = normalizeName(c.nom, c.prenom);
+    if(nameKey.length > 2){ (byName[nameKey] = byName[nameKey]||[]).push(c); }
+  });
+  const groups = [];
+  Object.values(byPhone).forEach(list=>{ if(list.length>1) groups.push({reason:'Même numéro de téléphone', contacts:list}); });
+  Object.values(byName).forEach(list=>{ if(list.length>1) groups.push({reason:'Même nom', contacts:list}); });
+  return groups;
+}
+
+function countDuplicateContacts(){
+  const ids = new Set();
+  findDuplicateGroups().forEach(g => g.contacts.forEach(c => ids.add(c.id)));
+  return ids.size;
+}
+
 function renderTabs(){
   const wrap = document.getElementById('tabs');
   wrap.innerHTML = '';
@@ -560,6 +598,15 @@ function renderTabs(){
   todayTab.innerHTML = `🔔 Aujourd'hui <span class="n">${dueCount}</span>`;
   todayTab.onclick = ()=>{ state.activeStatus = '__TODAY__'; render(); };
   wrap.appendChild(todayTab);
+
+  const dupeCount = countDuplicateContacts();
+  if(dupeCount > 0){
+    const dupeTab = document.createElement('div');
+    dupeTab.className = 'tab' + (state.activeStatus==='__DUPES__' ? ' active' : '');
+    dupeTab.innerHTML = `⚠️ Doublons <span class="n">${dupeCount}</span>`;
+    dupeTab.onclick = ()=>{ state.activeStatus = '__DUPES__'; render(); };
+    wrap.appendChild(dupeTab);
+  }
 
   const mapTab = document.createElement('div');
   mapTab.className = 'tab' + (state.activeStatus==='__MAP__' ? ' active' : '');
@@ -693,16 +740,25 @@ function render(){
   renderTabs();
   renderTally();
   const sortRow = document.querySelector('.sort-row');
+
   if(state.activeStatus === '__MAP__'){
     document.getElementById('list').style.display = 'none';
     document.querySelector('.fab').style.display = 'none';
     sortRow.style.display = 'none';
+    hideDupes();
     renderMap();
+  } else if(state.activeStatus === '__DUPES__'){
+    document.getElementById('list').style.display = 'none';
+    document.querySelector('.fab').style.display = 'none';
+    sortRow.style.display = 'none';
+    hideMap();
+    renderDupes();
   } else {
     document.getElementById('list').style.display = '';
     document.querySelector('.fab').style.display = 'flex';
     sortRow.style.display = state.activeStatus === '__TODAY__' ? 'none' : 'flex';
     hideMap();
+    hideDupes();
     renderList();
   }
 }
@@ -784,6 +840,21 @@ document.getElementById('saveBtn').onclick = async ()=>{
     commentaires: document.getElementById('f_commentaires').value.trim(),
     statut: pickedStatus
   };
+
+  // détection de doublon avant sauvegarde (même téléphone ou même nom, en
+  // excluant la fiche qu'on est en train d'éditer)
+  const phoneKey = (data.tel||'').replace(/\D/g,'');
+  const nameKey = normalizeName(data.nom, data.prenom);
+  const potentialDupe = state.contacts.find(c=>{
+    if(c.id === state.editingId) return false;
+    const samePhone = phoneKey.length >= 8 && (c.tel||'').replace(/\D/g,'') === phoneKey;
+    const sameName = nameKey.length > 2 && normalizeName(c.nom, c.prenom) === nameKey;
+    return samePhone || sameName;
+  });
+  if(potentialDupe){
+    const proceed = confirm(`Un contact ressemblant existe déjà : ${potentialDupe.prenom} ${potentialDupe.nom}${potentialDupe.tel ? ' (' + potentialDupe.tel + ')' : ''}.\n\nEnregistrer quand même ?`);
+    if(!proceed) return;
+  }
 
   if(state.editingId){
     const idx = state.contacts.findIndex(c=>c.id===state.editingId);
@@ -1013,6 +1084,51 @@ function renderMap(){
 
 function hideMap(){
   document.getElementById('mapView').classList.remove('active');
+}
+
+function buildDupeCardHTML(c){
+  const telHref = (c.tel||'').replace(/\s+/g,'');
+  return `<div class="card" data-contact-id="${c.id}">
+    <div class="avatar">${initials(c.nom,c.prenom)}</div>
+    <div class="body">
+      <div class="row1">
+        <div class="name">${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}</div>
+        <div class="ville">${escapeHtml(c.ville||'')}</div>
+      </div>
+      <div class="profession">${escapeHtml(c.profession||'')} · <span style="color:var(--ink-soft)">${escapeHtml(c.statut)}</span></div>
+      ${c.tel ? `<a class="phone-line" href="tel:${telHref}" onclick="event.stopPropagation()">📞 ${escapeHtml(c.tel)}</a>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderDupes(){
+  const el = document.getElementById('dupesView');
+  el.classList.add('active');
+  const groups = findDuplicateGroups();
+
+  if(groups.length === 0){
+    el.innerHTML = `<div class="empty">
+      <div class="glyph">✓</div>
+      <div class="display">Aucun doublon détecté</div>
+      <div>Tous tes contacts semblent uniques (même nom ou même numéro).</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = groups.map(g => `
+    <div class="dupe-group">
+      <div class="dupe-group-header">⚠️ ${escapeHtml(g.reason)}</div>
+      ${g.contacts.map(c => buildDupeCardHTML(c)).join('')}
+    </div>
+  `).join('');
+
+  el.querySelectorAll('[data-contact-id]').forEach(node=>{
+    node.addEventListener('click', ()=> openSheet(Number(node.getAttribute('data-contact-id'))));
+  });
+}
+
+function hideDupes(){
+  document.getElementById('dupesView').classList.remove('active');
 }
 
 loadData();
