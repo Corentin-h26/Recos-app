@@ -396,6 +396,28 @@
     .bulk-bar{max-width:900px; left:50%; right:auto; transform:translateX(-50%);}
   }
 
+  /* ÉCRAN DE CONNEXION */
+  .login-screen{
+    position:fixed; inset:0; z-index:20000; display:none;
+    align-items:center; justify-content:center; padding:20px;
+    background:
+      radial-gradient(1200px 500px at 50% -10%, var(--body-glow) 0%, var(--paper) 45%),
+      var(--paper);
+  }
+  .login-screen.show{display:flex;}
+  .login-card{
+    width:100%; max-width:360px; background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:28px 24px; box-shadow:var(--card-shadow);
+    display:flex; flex-direction:column; gap:14px;
+  }
+  .login-card h1{margin:0; font-size:26px; text-align:center; color:var(--ink);}
+  .login-sub{margin:-8px 0 4px; text-align:center; font-size:13px; color:var(--ink-soft);}
+  .login-error{font-size:12.5px; color:var(--rust); min-height:16px; text-align:center;}
+  .login-forgot{
+    text-align:center; font-size:12.5px; color:var(--ink-soft);
+    text-decoration:underline; margin-top:2px;
+  }
+
   /* MAP TAB */
   #mapView{
     display:none; height: calc(100vh - 190px); min-height:400px;
@@ -459,6 +481,18 @@
 </style>
 </head>
 <body>
+
+<div class="login-screen" id="loginScreen">
+  <form class="login-card" id="loginForm">
+    <h1 class="display">Recos</h1>
+    <p class="login-sub">Connexion sécurisée</p>
+    <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" required></div>
+    <div class="field"><label>Mot de passe</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
+    <div class="login-error" id="loginError"></div>
+    <button class="btn btn-primary" type="submit" style="width:100%; justify-content:center; padding:12px;">Se connecter</button>
+    <a href="#" class="login-forgot" id="forgotPasswordLink">Mot de passe oublié ?</a>
+  </form>
+</div>
 
 <header>
   <div class="brand">
@@ -618,6 +652,13 @@
         </span>
         <span class="action-state" id="actionThemeState">Désactivé</span>
       </button>
+      <button class="action-row" id="actionLogout">
+        <span class="action-icon">🔒</span>
+        <span class="action-text">
+          <span class="action-label">Se déconnecter</span>
+          <span class="action-sub">Ferme la session sur cet appareil</span>
+        </span>
+      </button>
     </div>
   </div>
 </div>
@@ -697,18 +738,15 @@ function loadData(){
     loadLocalFallback();
     return;
   }
-  auth.signInAnonymously().catch(err=>{
-    console.error("Connexion Firebase impossible", err);
-    showToast("Connexion cloud impossible — mode hors-ligne");
-    loadLocalFallback();
-  });
-
-  // si Firestore ne répond pas assez vite (pas de réseau, etc.), on affiche
-  // quand même les données locales pour ne pas laisser l'écran vide
-  setTimeout(loadLocalFallback, 4000);
 
   auth.onAuthStateChanged(user=>{
-    if(!user) return;
+    if(!user){
+      document.getElementById('loginScreen').classList.add('show');
+      return;
+    }
+    document.getElementById('loginScreen').classList.remove('show');
+    document.getElementById('loginError').textContent = '';
+
     // écoute en temps réel : toute modif sur un autre appareil arrive ici automatiquement
     docRef.onSnapshot(snap=>{
       firestoreReady = true;
@@ -733,6 +771,32 @@ function loadData(){
     });
   });
 }
+
+// ---- CONNEXION / DÉCONNEXION ----
+document.getElementById('loginForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  auth.signInWithEmailAndPassword(email, password).catch(err=>{
+    errEl.textContent = "Email ou mot de passe incorrect.";
+  });
+});
+
+document.getElementById('forgotPasswordLink').onclick = (e)=>{
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const errEl = document.getElementById('loginError');
+  if(!email){ errEl.textContent = "Indique ton email dans le champ ci-dessus d'abord."; return; }
+  auth.sendPasswordResetEmail(email).then(()=>{
+    errEl.style.color = 'var(--teal)';
+    errEl.textContent = "Email de réinitialisation envoyé.";
+  }).catch(()=>{
+    errEl.style.color = 'var(--rust)';
+    errEl.textContent = "Impossible d'envoyer l'email (vérifie l'adresse).";
+  });
+};
 
 function loadLocalFallback(){
   if(firestoreReady) return; // Firestore a fini par répondre, pas besoin du secours local
@@ -1476,6 +1540,13 @@ function toggleTheme(){
 }
 document.getElementById('actionTheme').onclick = toggleTheme;
 updateThemeBtnUI();
+
+document.getElementById('actionLogout').onclick = ()=>{
+  actionsOverlay.classList.remove('open');
+  if(confirm("Se déconnecter de Recos sur cet appareil ?")){
+    auth.signOut();
+  }
+};
 
 const notifiedToday = new Set();
 function checkDueNotifications(){
