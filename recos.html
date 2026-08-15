@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('recos-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  }catch(e){}
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>Recos</title>
@@ -32,20 +40,44 @@
     --line: #D8CDB4;
     --brass:#A9782F;
     --brass-soft:#E4CE9E;
+    --brass-ink:#7A5620;
     --teal:#3F6B63;
     --teal-soft:#DCE7E2;
     --rust:#AD5A3F;
     --rust-soft:#F0DBD1;
     --slate:#6B7684;
     --slate-soft:#E4E6E7;
+    --surface:#fff;
+    --placeholder:#A3ABA2;
+    --body-glow:#fffaf0;
     --card-shadow: 0 1px 0 rgba(34,48,58,0.06), 0 6px 16px -10px rgba(34,48,58,0.35);
     --radius: 14px;
+  }
+  [data-theme="dark"]{
+    --paper:#1B2228;
+    --paper-2:#242D34;
+    --ink:#EDE7D9;
+    --ink-soft:#9BA7AC;
+    --line:#3A444C;
+    --brass:#D9B872;
+    --brass-soft:#4A3D22;
+    --brass-ink:#F0D9A0;
+    --teal:#7FB3A8;
+    --teal-soft:#243A36;
+    --rust:#E08A6C;
+    --rust-soft:#3E2620;
+    --slate:#9AA6B0;
+    --slate-soft:#2C333A;
+    --surface:#242D34;
+    --placeholder:#6B7680;
+    --body-glow:#232C33;
+    --card-shadow: 0 1px 0 rgba(0,0,0,0.2), 0 6px 16px -10px rgba(0,0,0,0.6);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
     background:
-      radial-gradient(1200px 500px at 50% -10%, #fffaf0 0%, var(--paper) 45%),
+      radial-gradient(1200px 500px at 50% -10%, var(--body-glow) 0%, var(--paper) 45%),
       var(--paper);
     color:var(--ink);
     font-family:'IBM Plex Sans', system-ui, sans-serif;
@@ -79,7 +111,7 @@
   }
   .search-wrap{
     display:flex; align-items:center; gap:8px;
-    background:#fff; border:1px solid var(--line); border-radius:12px;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
     padding:9px 12px; box-shadow: inset 0 1px 2px rgba(34,48,58,0.04);
   }
   .search-wrap svg{flex:none; color:var(--ink-soft);}
@@ -87,7 +119,7 @@
     border:none; outline:none; background:transparent; width:100%;
     font-family:'IBM Plex Sans', sans-serif; font-size:15px; color:var(--ink);
   }
-  .search-wrap input::placeholder{color:#A3ABA2;}
+  .search-wrap input::placeholder{color:var(--placeholder);}
 
   .sort-row{
     display:flex; align-items:center; gap:8px; margin-top:8px; padding: 0 2px;
@@ -144,11 +176,11 @@
     background:rgba(34,48,58,0.08); padding:1px 6px; border-radius:20px;
   }
   .tab.active{
-    background:#fff; color:var(--ink); border-color: var(--line);
+    background:var(--surface); color:var(--ink); border-color: var(--line);
     border-bottom:3px solid var(--brass);
     box-shadow: 0 2px 6px -2px rgba(34,48,58,0.2);
   }
-  .tab.active .n{background:var(--brass-soft); color:#7A5620;}
+  .tab.active .n{background:var(--brass-soft); color:var(--brass-ink);}
 
   /* LIST */
   main{padding: 8px 16px 20px;}
@@ -159,7 +191,7 @@
   .empty .display{font-size:19px; color:var(--ink); margin-bottom:4px;}
 
   .card{
-    background:#fff; border:1px solid var(--line); border-radius: var(--radius);
+    background:var(--surface); border:1px solid var(--line); border-radius: var(--radius);
     padding: 13px 14px; margin-bottom:10px; box-shadow: var(--card-shadow);
     display:flex; gap:12px; align-items:flex-start; cursor:pointer;
     transition: transform .1s ease;
@@ -190,7 +222,7 @@
     padding:3px 8px; border-radius:20px;
   }
   .card .rappel-badge.overdue{background:var(--rust-soft); color:var(--rust);}
-  .card .rappel-badge.today{background:var(--brass-soft); color:#7A5620;}
+  .card .rappel-badge.today{background:var(--brass-soft); color:var(--brass-ink);}
   .card .rappel-badge.upcoming{background:var(--slate-soft); color:var(--slate);}
   .card .call-btn{
     flex:none; width:34px; height:34px; border-radius:50%;
@@ -242,7 +274,7 @@
     color:var(--ink-soft); margin-bottom:5px; font-weight:600;
   }
   .field input, .field textarea{
-    width:100%; border:1px solid var(--line); background:#fff; border-radius:10px;
+    width:100%; border:1px solid var(--line); background:var(--surface); border-radius:10px;
     padding:10px 12px; font-size:15px; font-family:'IBM Plex Sans', sans-serif;
     color:var(--ink); outline:none;
   }
@@ -253,7 +285,7 @@
   .status-picker{display:flex; flex-wrap:wrap; gap:6px;}
   .status-chip{
     padding:7px 11px; border-radius:20px; font-size:12.5px; font-weight:500;
-    border:1px solid var(--line); background:#fff; color:var(--ink-soft); cursor:pointer;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-soft); cursor:pointer;
   }
   .status-chip.sel{background:var(--ink); color:var(--paper); border-color:var(--ink);}
 
@@ -274,8 +306,13 @@
     position:fixed; top:14px; left:50%; transform:translateX(-50%) translateY(-20px);
     background:var(--ink); color:var(--paper); padding:9px 16px; border-radius:30px;
     font-size:13px; z-index:10000; opacity:0; transition: all .25s ease; pointer-events:none;
+    display:flex; align-items:center; gap:10px;
   }
-  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto;}
+  .toast .toast-undo{
+    color:var(--brass-soft); font-weight:600; text-decoration:underline; cursor:pointer;
+    background:none; border:none; font-size:13px; font-family:'IBM Plex Sans', sans-serif; padding:0; flex:none;
+  }
 
   /* PHONE (visible + cliquable) */
   .card .phone-line{
@@ -298,7 +335,7 @@
     background:var(--paper-2); border:1px solid var(--line); color:var(--ink-soft);
     display:flex; align-items:center; justify-content:center; cursor:pointer;
   }
-  .notif-btn.on{background:var(--brass-soft); color:#7A5620; border-color:var(--brass-soft);}
+  .notif-btn.on{background:var(--brass-soft); color:var(--brass-ink); border-color:var(--brass-soft);}
 
   /* MENU ACTIONS */
   .action-list{display:flex; flex-direction:column; margin-top:4px;}
@@ -317,7 +354,7 @@
     flex:none; font-size:11.5px; font-weight:600; color:var(--ink-soft);
     background:var(--paper-2); border:1px solid var(--line); border-radius:20px; padding:3px 9px;
   }
-  .action-state.on{background:var(--brass-soft); color:#7A5620; border-color:var(--brass-soft);}
+  .action-state.on{background:var(--brass-soft); color:var(--brass-ink); border-color:var(--brass-soft);}
 
   /* HISTORIQUE DE SUIVI */
   .history-list{
@@ -332,6 +369,32 @@
   .history-date{color:var(--ink-soft); flex:none; white-space:nowrap;}
   .history-transition{color:var(--ink); text-align:right;}
   .history-transition .arrow{color:var(--ink-soft); margin:0 3px;}
+
+  /* SÉLECTION MULTIPLE */
+  .card.selected{border-color:var(--brass); background:var(--brass-soft);}
+  .select-dot{
+    flex:none; width:22px; height:22px; border-radius:50%; border:2px solid var(--line);
+    margin-top:2px; display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:700; color:#fff;
+  }
+  .select-dot.checked{background:var(--brass); border-color:var(--brass);}
+  .bulk-bar{
+    position:fixed; left:16px; right:16px; bottom:16px; z-index:600;
+    background:var(--ink); color:var(--paper); border-radius:16px;
+    padding:10px 12px; display:none; align-items:center; justify-content:space-between; gap:10px;
+    box-shadow:0 8px 24px -8px rgba(0,0,0,0.45);
+  }
+  .bulk-bar.show{display:flex;}
+  .bulk-cancel{
+    background:none; border:none; color:var(--paper); opacity:.7; font-size:13px;
+    cursor:pointer; padding:6px 4px; font-family:'IBM Plex Sans', sans-serif; flex:none;
+  }
+  .bulk-count{font-size:13px; font-weight:600; flex:1; text-align:center; white-space:nowrap;}
+  .bulk-actions{display:flex; gap:8px; flex:none;}
+  .bulk-actions .btn{padding:8px 12px; font-size:12.5px; border-radius:20px;}
+  @media (min-width:780px){
+    .bulk-bar{max-width:900px; left:50%; right:auto; transform:translateX(-50%);}
+  }
 
   /* MAP TAB */
   #mapView{
@@ -352,8 +415,8 @@
   .dupe-group .card{border-color:var(--rust-soft); margin-bottom:8px;}
   .leaflet-popup-content{font-family:'IBM Plex Sans', sans-serif; font-size:13px;}
   .leaflet-popup-content b{font-family:'Fraunces', serif;}
-  .map-popup-item{padding:3px 0; border-top:1px solid #eee; cursor:pointer;}
-  .map-popup-item:hover{background:#F6F1E7;}
+  .map-popup-item{padding:3px 0; border-top:1px solid var(--line); cursor:pointer;}
+  .map-popup-item:hover{background:var(--paper);}
   .map-popup-item:first-of-type{border-top:none;}
 
   /* RESPONSIVE : iPad / Mac (écrans larges, souris/trackpad) */
@@ -370,7 +433,7 @@
       flex-wrap: wrap; overflow-x: visible; padding: 16px 0 8px;
     }
     .tab{cursor:pointer;}
-    .tab:hover{background:#fff; border-color:var(--ink-soft);}
+    .tab:hover{background:var(--surface); border-color:var(--ink-soft);}
     #list{
       display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; align-items:start;
     }
@@ -438,6 +501,26 @@
 <button class="fab" id="fabAdd" aria-label="Ajouter">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button>
+
+<div class="bulk-bar" id="bulkBar">
+  <button class="bulk-cancel" id="bulkCancel">Annuler</button>
+  <span class="bulk-count" id="bulkCount">0 sélectionné(s)</span>
+  <div class="bulk-actions">
+    <button class="btn btn-ghost" id="bulkStatusBtn">Statut</button>
+    <button class="btn btn-danger" id="bulkDeleteBtn">Supprimer</button>
+  </div>
+</div>
+
+<div class="overlay" id="bulkStatusOverlay">
+  <div class="sheet" style="max-width:440px;">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      <h2 class="display">Changer le statut</h2>
+      <button class="close" id="closeBulkStatusSheet">&times;</button>
+    </div>
+    <div class="status-picker" id="bulkStatusPicker"></div>
+  </div>
+</div>
 
 <div class="overlay" id="overlay">
   <div class="sheet">
@@ -520,6 +603,21 @@
           <span class="action-sub">Télécharge une sauvegarde de tous tes contacts</span>
         </span>
       </button>
+      <button class="action-row" id="actionSelectMode">
+        <span class="action-icon">🗂️</span>
+        <span class="action-text">
+          <span class="action-label">Sélection multiple</span>
+          <span class="action-sub">Change le statut ou supprime plusieurs contacts à la fois</span>
+        </span>
+      </button>
+      <button class="action-row" id="actionTheme">
+        <span class="action-icon" id="actionThemeIcon">🌙</span>
+        <span class="action-text">
+          <span class="action-label">Mode sombre</span>
+          <span class="action-sub">Bascule entre thème clair et sombre</span>
+        </span>
+        <span class="action-state" id="actionThemeState">Désactivé</span>
+      </button>
     </div>
   </div>
 </div>
@@ -545,7 +643,9 @@ let state = {
   activeStatus: "Contact",
   search: "",
   editingId: null,
-  sortMode: localStorage.getItem('recos-sort-mode') || 'rappel'
+  sortMode: localStorage.getItem('recos-sort-mode') || 'rappel',
+  selectMode: false,
+  selectedIds: new Set()
 };
 
 function getCreatedAt(c){
@@ -646,11 +746,27 @@ async function persist(){
   }
 }
 
-function showToast(msg){
+let toastTimer = null;
+function showToast(msg, action){
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  clearTimeout(toastTimer);
+  t.innerHTML = '';
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = msg;
+  t.appendChild(msgSpan);
+  if(action){
+    const btn = document.createElement('button');
+    btn.className = 'toast-undo';
+    btn.textContent = action.label;
+    btn.onclick = ()=>{
+      action.onClick();
+      t.classList.remove('show');
+      clearTimeout(toastTimer);
+    };
+    t.appendChild(btn);
+  }
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 1600);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), action ? 6000 : 1600);
 }
 
 function initials(nom, prenom){
@@ -691,6 +807,12 @@ function countDuplicateContacts(){
   return ids.size;
 }
 
+function switchTab(status){
+  if(state.selectMode) exitSelectMode(true);
+  state.activeStatus = status;
+  render();
+}
+
 function renderTabs(){
   const wrap = document.getElementById('tabs');
   wrap.innerHTML = '';
@@ -699,7 +821,7 @@ function renderTabs(){
   const todayTab = document.createElement('div');
   todayTab.className = 'tab today-tab' + (state.activeStatus==='__TODAY__' ? ' active' : '');
   todayTab.innerHTML = `🔔 Aujourd'hui <span class="n">${dueCount}</span>`;
-  todayTab.onclick = ()=>{ state.activeStatus = '__TODAY__'; render(); };
+  todayTab.onclick = ()=> switchTab('__TODAY__');
   wrap.appendChild(todayTab);
 
   const dupeCount = countDuplicateContacts();
@@ -707,14 +829,14 @@ function renderTabs(){
     const dupeTab = document.createElement('div');
     dupeTab.className = 'tab' + (state.activeStatus==='__DUPES__' ? ' active' : '');
     dupeTab.innerHTML = `⚠️ Doublons <span class="n">${dupeCount}</span>`;
-    dupeTab.onclick = ()=>{ state.activeStatus = '__DUPES__'; render(); };
+    dupeTab.onclick = ()=> switchTab('__DUPES__');
     wrap.appendChild(dupeTab);
   }
 
   const mapTab = document.createElement('div');
   mapTab.className = 'tab' + (state.activeStatus==='__MAP__' ? ' active' : '');
   mapTab.innerHTML = `🗺️ Carte`;
-  mapTab.onclick = ()=>{ state.activeStatus = '__MAP__'; render(); };
+  mapTab.onclick = ()=> switchTab('__MAP__');
   wrap.appendChild(mapTab);
 
   STATUSES.forEach(s=>{
@@ -722,7 +844,7 @@ function renderTabs(){
     const el = document.createElement('div');
     el.className = 'tab' + (state.activeStatus===s ? ' active' : '');
     el.innerHTML = `${s} <span class="n">${count}</span>`;
-    el.onclick = ()=>{ state.activeStatus = s; render(); };
+    el.onclick = ()=> switchTab(s);
     wrap.appendChild(el);
   });
 }
@@ -840,10 +962,11 @@ function renderList(){
 
   items.forEach(c=>{
     const card = document.createElement('div');
-    card.className = 'card';
+    card.className = 'card' + (state.selectMode && state.selectedIds.has(c.id) ? ' selected' : '');
     const telHref = (c.tel||'').replace(/\s+/g,'');
     const ri = rappelInfo(c);
     card.innerHTML = `
+      ${state.selectMode ? `<div class="select-dot${state.selectedIds.has(c.id) ? ' checked' : ''}">${state.selectedIds.has(c.id) ? '✓' : ''}</div>` : ''}
       <div class="avatar">${initials(c.nom,c.prenom)}</div>
       <div class="body">
         <div class="row1">
@@ -856,11 +979,17 @@ function renderList(){
         ${c.commentaires ? `<div class="comment">${escapeHtml(c.commentaires)}</div>` : ''}
         ${ri ? `<div class="rappel-badge ${ri.cls}">⏰ ${ri.label}${c.rappel_note ? ' · ' + escapeHtml(c.rappel_note) : ''}</div>` : ''}
       </div>
-      ${c.tel ? `<a class="call-btn" href="tel:${telHref}" onclick="event.stopPropagation()">
+      ${(c.tel && !state.selectMode) ? `<a class="call-btn" href="tel:${telHref}" onclick="event.stopPropagation()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       </a>` : ''}
     `;
-    card.onclick = ()=> openSheet(c.id);
+    card.onclick = ()=> {
+      if(state.selectMode){
+        toggleSelect(c.id);
+      } else {
+        openSheet(c.id);
+      }
+    };
     list.appendChild(card);
   });
 }
@@ -900,13 +1029,13 @@ function renderDashboard(){
     seg.style.width = pct + '%';
     seg.style.background = color;
     seg.title = `${s} : ${count}`;
-    seg.onclick = ()=>{ state.activeStatus = s; render(); };
+    seg.onclick = ()=> switchTab(s);
     bar.appendChild(seg);
 
     const item = document.createElement('div');
     item.className = 'dash-legend-item';
     item.innerHTML = `<span class="dash-legend-dot" style="background:${color}"></span>${s} · ${count}`;
-    item.onclick = ()=>{ state.activeStatus = s; render(); };
+    item.onclick = ()=> switchTab(s);
     legend.appendChild(item);
   });
 }
@@ -944,7 +1073,8 @@ function render(){
     renderDupes();
   } else {
     document.getElementById('list').style.display = '';
-    document.querySelector('.fab').style.display = 'flex';
+    document.querySelector('.fab').style.display = state.selectMode ? 'none' : 'flex';
+    document.getElementById('bulkBar').classList.toggle('show', state.selectMode);
     sortRow.style.display = state.activeStatus === '__TODAY__' ? 'none' : 'flex';
     hideMap();
     hideDupes();
@@ -1074,11 +1204,21 @@ document.getElementById('saveBtn').onclick = async ()=>{
 document.getElementById('deleteBtn').onclick = async ()=>{
   if(!state.editingId) return;
   if(!confirm('Supprimer ce contact ?')) return;
+  const deletedContact = state.contacts.find(c=>c.id === state.editingId);
+  const deletedIndex = state.contacts.findIndex(c=>c.id === state.editingId);
   state.contacts = state.contacts.filter(c=>c.id !== state.editingId);
   persist();
   closeSheet();
   render();
-  showToast("Contact supprimé");
+  showToast("Contact supprimé", {
+    label: "Annuler",
+    onClick: ()=>{
+      state.contacts.splice(deletedIndex, 0, deletedContact);
+      persist();
+      render();
+      showToast("Contact restauré");
+    }
+  });
 };
 
 // ---- APPEL DIRECT DANS LA FICHE ----
@@ -1212,6 +1352,119 @@ function exportToExcel(){
   actionsOverlay.classList.remove('open');
 }
 document.getElementById('actionExcel').onclick = exportToExcel;
+
+// ---- SÉLECTION MULTIPLE ----
+function enterSelectMode(){
+  if(state.activeStatus === '__MAP__' || state.activeStatus === '__DUPES__'){
+    showToast("Passe d'abord sur une liste de contacts");
+    return;
+  }
+  state.selectMode = true;
+  state.selectedIds = new Set();
+  document.getElementById('fabAdd').style.display = 'none';
+  document.getElementById('bulkBar').classList.add('show');
+  updateBulkBar();
+  renderList();
+}
+function exitSelectMode(skipRender){
+  state.selectMode = false;
+  state.selectedIds = new Set();
+  document.getElementById('fabAdd').style.display = 'flex';
+  document.getElementById('bulkBar').classList.remove('show');
+  if(!skipRender) renderList();
+}
+function toggleSelect(id){
+  if(state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id);
+  updateBulkBar();
+  renderList();
+}
+function updateBulkBar(){
+  document.getElementById('bulkCount').textContent = `${state.selectedIds.size} sélectionné(s)`;
+}
+
+document.getElementById('actionSelectMode').onclick = ()=>{
+  actionsOverlay.classList.remove('open');
+  enterSelectMode();
+};
+document.getElementById('bulkCancel').onclick = ()=> exitSelectMode();
+
+document.getElementById('bulkDeleteBtn').onclick = ()=>{
+  if(state.selectedIds.size === 0){ showToast("Sélectionne au moins un contact"); return; }
+  const count = state.selectedIds.size;
+  if(!confirm(`Supprimer ${count} contact(s) ?`)) return;
+  const deletedContacts = state.contacts.filter(c=>state.selectedIds.has(c.id));
+  state.contacts = state.contacts.filter(c=>!state.selectedIds.has(c.id));
+  persist();
+  exitSelectMode();
+  render();
+  showToast(`${deletedContacts.length} contact(s) supprimé(s)`, {
+    label: "Annuler",
+    onClick: ()=>{
+      state.contacts.push(...deletedContacts);
+      persist();
+      render();
+      showToast("Contacts restaurés");
+    }
+  });
+};
+
+document.getElementById('bulkStatusBtn').onclick = ()=>{
+  if(state.selectedIds.size === 0){ showToast("Sélectionne au moins un contact"); return; }
+  renderBulkStatusPicker();
+  document.getElementById('bulkStatusOverlay').classList.add('open');
+};
+
+function renderBulkStatusPicker(){
+  const wrap = document.getElementById('bulkStatusPicker');
+  wrap.innerHTML = '';
+  STATUSES.forEach(s=>{
+    const chip = document.createElement('div');
+    chip.className = 'status-chip';
+    chip.textContent = s;
+    chip.onclick = ()=> applyBulkStatus(s);
+    wrap.appendChild(chip);
+  });
+}
+
+function applyBulkStatus(newStatus){
+  const ids = [...state.selectedIds];
+  ids.forEach(id=>{
+    const idx = state.contacts.findIndex(c=>c.id===id);
+    if(idx === -1) return;
+    const c = state.contacts[idx];
+    if(c.statut !== newStatus){
+      const historique = Array.isArray(c.historique) ? [...c.historique] : [];
+      historique.push({ date: Date.now(), from: c.statut, to: newStatus });
+      state.contacts[idx] = {...c, statut: newStatus, historique};
+    }
+  });
+  persist();
+  document.getElementById('bulkStatusOverlay').classList.remove('open');
+  exitSelectMode(true);
+  render();
+  showToast(`Statut mis à jour pour ${ids.length} contact(s)`);
+}
+
+document.getElementById('closeBulkStatusSheet').onclick = ()=> document.getElementById('bulkStatusOverlay').classList.remove('open');
+document.getElementById('bulkStatusOverlay').addEventListener('click', (e)=>{ if(e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+
+// ---- MODE SOMBRE ----
+function updateThemeBtnUI(){
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.getElementById('actionThemeState').textContent = isDark ? 'Activé' : 'Désactivé';
+  document.getElementById('actionThemeState').classList.toggle('on', isDark);
+  document.getElementById('actionThemeIcon').textContent = isDark ? '☀️' : '🌙';
+}
+function toggleTheme(){
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('recos-theme', next);
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', next === 'dark' ? '#1B2228' : '#22303A');
+  updateThemeBtnUI();
+}
+document.getElementById('actionTheme').onclick = toggleTheme;
+updateThemeBtnUI();
 
 const notifiedToday = new Set();
 function checkDueNotifications(){
