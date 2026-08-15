@@ -104,8 +104,10 @@
   .dash-header{
     display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;
   }
-  .dash-summary{font-size:12.5px; color:var(--ink-soft);}
+  .dash-summary{font-size:12.5px; color:var(--ink-soft); display:flex; align-items:baseline; gap:6px; flex-wrap:wrap;}
   .dash-summary strong{color:var(--ink); font-weight:600;}
+  .dash-summary em{font-style:normal; color:var(--ink-soft);}
+  .dash-summary .dash-sep{color:var(--line);}
   .dash-toggle{
     background:none; border:none; color:var(--ink-soft); font-size:12px;
     cursor:pointer; padding:2px 8px; line-height:1;
@@ -298,6 +300,25 @@
   }
   .notif-btn.on{background:var(--brass-soft); color:#7A5620; border-color:var(--brass-soft);}
 
+  /* MENU ACTIONS */
+  .action-list{display:flex; flex-direction:column; margin-top:4px;}
+  .action-row{
+    display:flex; align-items:center; gap:13px; width:100%;
+    background:none; border:none; border-top:1px solid var(--line);
+    padding:14px 4px; text-align:left; cursor:pointer; font-family:'IBM Plex Sans', sans-serif;
+  }
+  .action-row:first-child{border-top:none;}
+  .action-row:active{background:var(--paper-2);}
+  .action-icon{font-size:19px; flex:none; width:26px; text-align:center;}
+  .action-text{display:flex; flex-direction:column; flex:1; min-width:0;}
+  .action-label{font-size:15px; font-weight:500; color:var(--ink);}
+  .action-sub{font-size:12px; color:var(--ink-soft); margin-top:1px;}
+  .action-state{
+    flex:none; font-size:11.5px; font-weight:600; color:var(--ink-soft);
+    background:var(--paper-2); border:1px solid var(--line); border-radius:20px; padding:3px 9px;
+  }
+  .action-state.on{background:var(--brass-soft); color:#7A5620; border-color:var(--brass-soft);}
+
   /* MAP TAB */
   #mapView{
     display:none; height: calc(100vh - 190px); min-height:400px;
@@ -366,14 +387,8 @@
   <div class="brand">
     <h1>Recos <span class="tally" id="tally">…</span></h1>
     <div class="header-actions">
-      <button class="notif-btn" id="notifBtn" title="Activer les notifications de rappel">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      </button>
-      <button class="notif-btn" id="syncRemindersBtn" title="Copier la liste des rappels pour Rappels iPhone">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      </button>
-      <button class="notif-btn" id="exportExcelBtn" title="Exporter en Excel (sauvegarde)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <button class="notif-btn" id="actionsMenuBtn" title="Actions">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
       </button>
     </div>
   </div>
@@ -453,6 +468,40 @@
     <div class="sheet-actions">
       <button class="btn btn-danger" id="deleteBtn" style="display:none;">Supprimer</button>
       <button class="btn btn-primary" id="saveBtn">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="actionsOverlay">
+  <div class="sheet" style="max-width:440px;">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      <h2 class="display">Actions</h2>
+      <button class="close" id="closeActionsSheet">&times;</button>
+    </div>
+    <div class="action-list">
+      <button class="action-row" id="actionNotif">
+        <span class="action-icon">🔔</span>
+        <span class="action-text">
+          <span class="action-label">Notifications de rappel</span>
+          <span class="action-sub">Alerte si l'app reste ouverte en onglet</span>
+        </span>
+        <span class="action-state" id="actionNotifState">Désactivées</span>
+      </button>
+      <button class="action-row" id="actionSync">
+        <span class="action-icon">✅</span>
+        <span class="action-text">
+          <span class="action-label">Copier mes rappels</span>
+          <span class="action-sub">À coller à Claude pour créer de vrais rappels iPhone</span>
+        </span>
+      </button>
+      <button class="action-row" id="actionExcel">
+        <span class="action-icon">⬇️</span>
+        <span class="action-text">
+          <span class="action-label">Exporter en Excel</span>
+          <span class="action-sub">Télécharge une sauvegarde de tous tes contacts</span>
+        </span>
+      </button>
     </div>
   </div>
 </div>
@@ -1006,13 +1055,20 @@ searchClear.addEventListener('click', ()=>{
   searchInput.focus();
 });
 
+// ---- MENU ACTIONS (•••) ----
+const actionsOverlay = document.getElementById('actionsOverlay');
+document.getElementById('actionsMenuBtn').onclick = ()=> actionsOverlay.classList.add('open');
+document.getElementById('closeActionsSheet').onclick = ()=> actionsOverlay.classList.remove('open');
+actionsOverlay.addEventListener('click', (e)=>{ if(e.target === actionsOverlay) actionsOverlay.classList.remove('open'); });
+
 // ---- NOTIFICATIONS (best effort : marche si l'app reste ouverte dans un onglet) ----
 const NOTIF_KEY = 'recos-notif-enabled';
-const notifBtn = document.getElementById('notifBtn');
 
 function updateNotifBtnUI(){
-  const enabled = localStorage.getItem(NOTIF_KEY) === '1' && Notification.permission === 'granted';
-  notifBtn.classList.toggle('on', enabled);
+  const enabled = ('Notification' in window) && localStorage.getItem(NOTIF_KEY) === '1' && Notification.permission === 'granted';
+  const stateEl = document.getElementById('actionNotifState');
+  stateEl.textContent = enabled ? 'Activées' : 'Désactivées';
+  stateEl.classList.toggle('on', enabled);
 }
 
 async function toggleNotifications(){
@@ -1033,10 +1089,10 @@ async function toggleNotifications(){
   showToast(currentlyOn ? "Notifications désactivées" : "Notifications activées (tant que l'app reste ouverte)");
   if(!currentlyOn) checkDueNotifications();
 }
-notifBtn.onclick = toggleNotifications;
+document.getElementById('actionNotif').onclick = toggleNotifications;
 
 // ---- SYNCHRO VERS RAPPELS IPHONE (via Claude, en collant la liste) ----
-document.getElementById('syncRemindersBtn').onclick = ()=>{
+function copyRemindersList(){
   const withDates = state.contacts
     .filter(c => c.rappel_date)
     .sort((a,b)=> a.rappel_date.localeCompare(b.rappel_date));
@@ -1054,20 +1110,22 @@ document.getElementById('syncRemindersBtn').onclick = ()=>{
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(()=>{
       showToast("Liste copiée — colle-la à Claude dans le chat");
+      actionsOverlay.classList.remove('open');
     }).catch(()=>{
       showManualCopyPrompt(text);
     });
   } else {
     showManualCopyPrompt(text);
   }
-};
+}
+document.getElementById('actionSync').onclick = copyRemindersList;
 
 function showManualCopyPrompt(text){
   window.prompt("Copie ce texte et colle-le à Claude dans le chat :", text);
 }
 
 // ---- EXPORT EXCEL (sauvegarde manuelle) ----
-document.getElementById('exportExcelBtn').onclick = ()=>{
+function exportToExcel(){
   if(typeof XLSX === 'undefined'){
     showToast("Export indisponible (bibliothèque non chargée)");
     return;
@@ -1095,7 +1153,9 @@ document.getElementById('exportExcelBtn').onclick = ()=>{
   XLSX.utils.book_append_sheet(wb, ws, 'Recos');
   XLSX.writeFile(wb, `recos-sauvegarde-${todayISO()}.xlsx`);
   showToast("Export Excel téléchargé");
-};
+  actionsOverlay.classList.remove('open');
+}
+document.getElementById('actionExcel').onclick = exportToExcel;
 
 const notifiedToday = new Set();
 function checkDueNotifications(){
