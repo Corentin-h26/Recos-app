@@ -670,6 +670,17 @@ let db = null, auth = null, docRef = null;
 if(typeof firebase !== 'undefined'){
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
+  // active le cache local natif de Firestore (IndexedDB) : les contacts restent
+  // consultables et modifiables hors-ligne, avec resynchro automatique au retour du réseau
+  db.enablePersistence({synchronizeTabs: true}).catch(err=>{
+    if(err.code === 'failed-precondition'){
+      console.warn("Persistance hors-ligne désactivée sur cet onglet (plusieurs onglets ouverts)");
+    } else if(err.code === 'unimplemented'){
+      console.warn("Persistance hors-ligne non supportée par ce navigateur");
+    } else {
+      console.warn("Persistance hors-ligne indisponible", err);
+    }
+  });
   auth = firebase.auth();
   docRef = db.collection('app').doc('recos-data');
 }
