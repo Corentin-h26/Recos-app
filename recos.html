@@ -417,6 +417,7 @@
     text-align:center; font-size:12.5px; color:var(--ink-soft);
     text-decoration:underline; margin-top:2px;
   }
+  .login-hint{margin:-6px 0 0; font-size:11.5px; color:var(--ink-soft); text-align:center;}
 
   /* MAP TAB */
   #mapView{
@@ -485,11 +486,13 @@
 <div class="login-screen" id="loginScreen">
   <form class="login-card" id="loginForm">
     <h1 class="display">Recos</h1>
-    <p class="login-sub">Connexion sécurisée</p>
+    <p class="login-sub" id="loginSub">Connexion sécurisée</p>
     <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" required></div>
     <div class="field"><label>Mot de passe</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
+    <p class="login-hint">Réservé aux collaborateurs Capfinances (@capfinances.fr)</p>
     <div class="login-error" id="loginError"></div>
-    <button class="btn btn-primary" type="submit" style="width:100%; justify-content:center; padding:12px;">Se connecter</button>
+    <button class="btn btn-primary" type="submit" id="loginSubmitBtn" style="width:100%; justify-content:center; padding:12px;">Se connecter</button>
+    <a href="#" class="login-forgot" id="toggleAuthMode">Pas encore de compte ? Créer un compte</a>
     <a href="#" class="login-forgot" id="forgotPasswordLink">Mot de passe oublié ?</a>
   </form>
 </div>
@@ -723,11 +726,11 @@ if(typeof firebase !== 'undefined'){
     }
   });
   auth = firebase.auth();
-  docRef = db.collection('app').doc('recos-data');
 }
 
 let firestoreReady = false;
 let applyingRemoteUpdate = false;
+let snapshotUnsubscribe = null;
 
 function loadData(){
   if(typeof firebase === 'undefined'){
@@ -739,28 +742,36 @@ function loadData(){
     return;
   }
 
-  auth.onAuthStateChanged(user=>{
+  auth.onAuthStateChanged(async user=>{
+    if(snapshotUnsubscribe){ snapshotUnsubscribe(); snapshotUnsubscribe = null; }
+
     if(!user){
+      state.contacts = [];
       document.getElementById('loginScreen').classList.add('show');
       return;
     }
     document.getElementById('loginScreen').classList.remove('show');
     document.getElementById('loginError').textContent = '';
 
+    // chaque conseiller a sa propre base, isolée par son identifiant de compte
+    docRef = db.collection('users').doc(user.uid).collection('data').doc('recos-data');
+
+    await migrateLegacyDataIfNeeded(user);
+
     // écoute en temps réel : toute modif sur un autre appareil arrive ici automatiquement
-    docRef.onSnapshot(snap=>{
+    snapshotUnsubscribe = docRef.onSnapshot(snap=>{
       firestoreReady = true;
       if(snap.exists && snap.data().contacts){
         applyingRemoteUpdate = true;
         state.contacts = snap.data().contacts;
         applyingRemoteUpdate = false;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.contacts)); // copie hors-ligne
+        localStorage.setItem(STORAGE_KEY + '-' + user.uid, JSON.stringify(state.contacts)); // copie hors-ligne
         render();
         updateNotifBtnUI();
         checkDueNotifications();
       } else {
-        // première utilisation : on amorce avec les données de départ
-        state.contacts = SEED;
+        // première connexion : base vierge pour ce conseiller
+        state.contacts = [];
         persist();
         render();
       }
@@ -772,15 +783,74 @@ function loadData(){
   });
 }
 
-// ---- CONNEXION / DÉCONNEXION ----
+// migre une fois l'ancienne base partagée (app/recos-data) vers l'espace personnel
+// du tout premier compte (Corentin) — sans effet pour les nouveaux conseillers,
+// qui n'ont de toute façon pas accès à cet ancien document
+async function migrateLegacyDataIfNeeded(user){
+  try{
+    const newSnap = await docRef.get();
+    if(newSnap.exists) return; // déjà migré ou déjà en place
+    const oldRef = db.collection('app').doc('recos-data');
+    const oldSnap = await oldRef.get();
+    if(oldSnap.exists && oldSnap.data().contacts && oldSnap.data().contacts.length){
+      await docRef.set({ contacts: oldSnap.data().contacts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      console.log("Ancienne base migrée vers l'espace personnel de", user.email);
+    }
+  }catch(e){
+    // pas d'accès à l'ancien document (nouveau conseiller) : rien à migrer, c'est normal
+  }
+}
+
+// ---- CONNEXION / INSCRIPTION / DÉCONNEXION ----
+const ALLOWED_EMAIL_DOMAIN = '@capfinances.fr';
+let authMode = 'login'; // 'login' ou 'signup'
+
+function updateAuthModeUI(){
+  document.getElementById('loginSubmitBtn').textContent = authMode === 'signup' ? 'Créer mon compte' : 'Se connecter';
+  document.getElementById('toggleAuthMode').textContent = authMode === 'signup' ? 'Déjà un compte ? Se connecter' : 'Pas encore de compte ? Créer un compte';
+  document.getElementById('loginSub').textContent = authMode === 'signup' ? 'Créer un compte' : 'Connexion sécurisée';
+  document.getElementById('forgotPasswordLink').style.display = authMode === 'signup' ? 'none' : 'block';
+  document.getElementById('loginError').textContent = '';
+}
+document.getElementById('toggleAuthMode').onclick = (e)=>{
+  e.preventDefault();
+  authMode = authMode === 'login' ? 'signup' : 'login';
+  updateAuthModeUI();
+};
+updateAuthModeUI();
+
+function authErrorMessage(code){
+  switch(code){
+    case 'auth/email-already-in-use': return "Un compte existe déjà avec cet email.";
+    case 'auth/weak-password': return "Mot de passe trop court (6 caractères minimum).";
+    case 'auth/invalid-email': return "Adresse email invalide.";
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential': return "Email ou mot de passe incorrect.";
+    case 'auth/too-many-requests': return "Trop de tentatives, réessaie dans quelques minutes.";
+    default: return "Une erreur est survenue. Réessaie.";
+  }
+}
+
 document.getElementById('loginForm').addEventListener('submit', (e)=>{
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   const errEl = document.getElementById('loginError');
+  errEl.style.color = 'var(--rust)';
   errEl.textContent = '';
-  auth.signInWithEmailAndPassword(email, password).catch(err=>{
-    errEl.textContent = "Email ou mot de passe incorrect.";
+
+  if(!email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN)){
+    errEl.textContent = `Réservé aux emails ${ALLOWED_EMAIL_DOMAIN}`;
+    return;
+  }
+
+  const action = authMode === 'signup'
+    ? auth.createUserWithEmailAndPassword(email, password)
+    : auth.signInWithEmailAndPassword(email, password);
+
+  action.catch(err=>{
+    errEl.textContent = authErrorMessage(err.code);
   });
 });
 
@@ -788,7 +858,7 @@ document.getElementById('forgotPasswordLink').onclick = (e)=>{
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
   const errEl = document.getElementById('loginError');
-  if(!email){ errEl.textContent = "Indique ton email dans le champ ci-dessus d'abord."; return; }
+  if(!email){ errEl.style.color = 'var(--rust)'; errEl.textContent = "Indique ton email dans le champ ci-dessus d'abord."; return; }
   auth.sendPasswordResetEmail(email).then(()=>{
     errEl.style.color = 'var(--teal)';
     errEl.textContent = "Email de réinitialisation envoyé.";
@@ -801,17 +871,21 @@ document.getElementById('forgotPasswordLink').onclick = (e)=>{
 function loadLocalFallback(){
   if(firestoreReady) return; // Firestore a fini par répondre, pas besoin du secours local
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    state.contacts = raw ? JSON.parse(raw) : SEED;
+    const uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+    if(!uid){ state.contacts = []; render(); return; }
+    const raw = localStorage.getItem(STORAGE_KEY + '-' + uid);
+    state.contacts = raw ? JSON.parse(raw) : [];
   }catch(e){
-    state.contacts = SEED;
+    state.contacts = [];
   }
   render();
 }
 
 async function persist(){
   if(applyingRemoteUpdate) return; // on ne renvoie pas ce qu'on vient de recevoir
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.contacts)); // toujours garder une copie locale
+  if(!docRef) return; // pas encore connecté
+  const uid = auth.currentUser ? auth.currentUser.uid : null;
+  if(uid) localStorage.setItem(STORAGE_KEY + '-' + uid, JSON.stringify(state.contacts)); // toujours garder une copie locale
   try{
     await docRef.set({ contacts: state.contacts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
   }catch(e){
