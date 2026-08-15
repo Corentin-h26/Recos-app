@@ -640,6 +640,14 @@
           <span class="action-sub">Télécharge une sauvegarde de tous tes contacts</span>
         </span>
       </button>
+      <button class="action-row" id="actionImport">
+        <span class="action-icon">📥</span>
+        <span class="action-text">
+          <span class="action-label">Importer un fichier Excel</span>
+          <span class="action-sub">Ajoute une liste de prospects dans "Contact"</span>
+        </span>
+      </button>
+      <input type="file" id="importExcelInput" accept=".xlsx,.xls,.csv" style="display:none;">
       <button class="action-row" id="actionSelectMode">
         <span class="action-icon">🗂️</span>
         <span class="action-text">
@@ -1501,6 +1509,105 @@ function exportToExcel(){
   actionsOverlay.classList.remove('open');
 }
 document.getElementById('actionExcel').onclick = exportToExcel;
+
+// ---- IMPORT EXCEL (nouveaux prospects → statut "Contact") ----
+const IMPORT_FIELD_CANDIDATES = {
+  nom: ['nom','lastname','nomdefamille'],
+  prenom: ['prenom','firstname'],
+  tel: ['telephone','tel','numero','numerodetelephone','numerotel','portable','mobile'],
+  ville: ['ville','city','commune'],
+  profession: ['profession','metier','job','activite'],
+  reco: ['recommandepar','reco','recommandation','parrain'],
+  commentaires: ['commentaires','commentaire','notes','remarque','remarques']
+};
+
+function normalizeKey(s){
+  return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+
+function buildImportColumnIndex(headerRow){
+  const normalized = headerRow.map(h => normalizeKey(h));
+  const idx = {};
+  Object.entries(IMPORT_FIELD_CANDIDATES).forEach(([field, candidates])=>{
+    const pos = normalized.findIndex(h => candidates.includes(h));
+    if(pos !== -1) idx[field] = pos;
+  });
+  return idx;
+}
+
+document.getElementById('actionImport').onclick = ()=>{
+  actionsOverlay.classList.remove('open');
+  document.getElementById('importExcelInput').click();
+};
+
+document.getElementById('importExcelInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  e.target.value = ''; // permet de réimporter le même fichier plus tard si besoin
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){
+    showToast("Import indisponible (bibliothèque non chargée)");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const data = new Uint8Array(evt.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+
+      if(rows.length < 2){
+        showToast("Fichier vide ou illisible");
+        return;
+      }
+
+      const headerRow = rows[0].map(h => String(h));
+      const idx = buildImportColumnIndex(headerRow);
+
+      if(idx.nom === undefined && idx.prenom === undefined){
+        showToast("Colonnes Nom / Prénom introuvables dans le fichier");
+        return;
+      }
+
+      const get = (row, field) => idx[field] !== undefined ? String(row[idx[field]] ?? '').trim() : '';
+
+      const imported = rows.slice(1)
+        .filter(r => r.some(cell => String(cell).trim() !== ''))
+        .map(r => ({
+          nom: get(r,'nom'), prenom: get(r,'prenom'), tel: get(r,'tel'),
+          ville: get(r,'ville'), profession: get(r,'profession'),
+          reco: get(r,'reco'), commentaires: get(r,'commentaires')
+        }))
+        .filter(c => c.nom || c.prenom);
+
+      if(imported.length === 0){
+        showToast("Aucune ligne valide trouvée dans le fichier");
+        return;
+      }
+
+      if(!confirm(`Importer ${imported.length} contact(s) dans "Contact" ?`)) return;
+
+      let nextId = state.contacts.length ? Math.max(...state.contacts.map(c=>c.id))+1 : 1;
+      const newContacts = imported.map(c => ({
+        id: nextId++,
+        createdAt: Date.now(),
+        nom: c.nom, prenom: c.prenom, tel: c.tel, ville: c.ville,
+        profession: c.profession, reco: c.reco, statut: 'Contact', commentaires: c.commentaires,
+        historique: [{ date: Date.now(), from: null, to: 'Contact' }]
+      }));
+      state.contacts.push(...newContacts);
+      persist();
+      state.activeStatus = 'Contact';
+      render();
+      showToast(`${newContacts.length} contact(s) importé(s) dans "Contact"`);
+    }catch(err){
+      console.error("Erreur d'import Excel", err);
+      showToast("Erreur lors de la lecture du fichier");
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
 
 // ---- SÉLECTION MULTIPLE ----
 function enterSelectMode(){
