@@ -319,6 +319,20 @@
   }
   .action-state.on{background:var(--brass-soft); color:#7A5620; border-color:var(--brass-soft);}
 
+  /* HISTORIQUE DE SUIVI */
+  .history-list{
+    display:flex; flex-direction:column; border:1px solid var(--line);
+    border-radius:10px; overflow:hidden; background:var(--paper-2);
+  }
+  .history-item{
+    display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+    padding:8px 12px; font-size:12.5px; border-top:1px solid var(--line);
+  }
+  .history-item:first-child{border-top:none;}
+  .history-date{color:var(--ink-soft); flex:none; white-space:nowrap;}
+  .history-transition{color:var(--ink); text-align:right;}
+  .history-transition .arrow{color:var(--ink-soft); margin:0 3px;}
+
   /* MAP TAB */
   #mapView{
     display:none; height: calc(100vh - 190px); min-height:400px;
@@ -463,6 +477,10 @@
     <div class="field">
       <label>Statut</label>
       <div class="status-picker" id="statusPicker"></div>
+    </div>
+    <div class="field" id="historiqueField" style="display:none;">
+      <label>Historique</label>
+      <div class="history-list" id="historyList"></div>
     </div>
 
     <div class="sheet-actions">
@@ -731,6 +749,37 @@ function formatDateFr(iso){
   return `${d}/${m}/${y}`;
 }
 
+function formatTimestampFr(ms){
+  const d = new Date(ms);
+  const day = String(d.getDate()).padStart(2,'0');
+  const month = String(d.getMonth()+1).padStart(2,'0');
+  const year = d.getFullYear();
+  const h = String(d.getHours()).padStart(2,'0');
+  const min = String(d.getMinutes()).padStart(2,'0');
+  return `${day}/${month}/${year} à ${h}h${min}`;
+}
+
+function renderHistory(c){
+  const field = document.getElementById('historiqueField');
+  const list = document.getElementById('historyList');
+  const historique = (c && Array.isArray(c.historique)) ? c.historique : [];
+  if(!c || historique.length === 0){
+    field.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  field.style.display = 'block';
+  list.innerHTML = [...historique].reverse().map(h=>{
+    const transition = h.from
+      ? `${h.from}<span class="arrow">→</span>${h.to}`
+      : `Créé en <strong>${h.to}</strong>`;
+    return `<div class="history-item">
+      <span class="history-date">${formatTimestampFr(h.date)}</span>
+      <span class="history-transition">${transition}</span>
+    </div>`;
+  }).join('');
+}
+
 function matchesSearch(c, q){
   if(!q) return true;
   q = q.toLowerCase();
@@ -949,6 +998,7 @@ function openSheet(id){
   document.getElementById('f_commentaires').value = c ? c.commentaires : '';
   pickedStatus = c ? c.statut : (state.activeStatus === '__TODAY__' ? 'Contact' : state.activeStatus);
   renderStatusPicker();
+  renderHistory(c);
 
   document.getElementById('deleteBtn').style.display = c ? 'block' : 'none';
   overlay.classList.add('open');
@@ -998,11 +1048,17 @@ document.getElementById('saveBtn').onclick = async ()=>{
 
   if(state.editingId){
     const idx = state.contacts.findIndex(c=>c.id===state.editingId);
-    state.contacts[idx] = {...state.contacts[idx], ...data};
+    const old = state.contacts[idx];
+    const historique = Array.isArray(old.historique) ? [...old.historique] : [];
+    if(old.statut !== data.statut){
+      historique.push({ date: Date.now(), from: old.statut, to: data.statut });
+    }
+    state.contacts[idx] = {...old, ...data, historique};
     showToast("Contact mis à jour");
   } else {
     const nextId = state.contacts.length ? Math.max(...state.contacts.map(c=>c.id))+1 : 1;
-    state.contacts.push({ id: nextId, createdAt: Date.now(), ...data });
+    const historique = [{ date: Date.now(), from: null, to: data.statut }];
+    state.contacts.push({ id: nextId, createdAt: Date.now(), ...data, historique });
     showToast("Contact ajouté");
   }
   // reste sur la vue "Aujourd'hui" si c'est là qu'on travaillait, sinon bascule
