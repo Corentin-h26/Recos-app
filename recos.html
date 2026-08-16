@@ -25,9 +25,6 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-app-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.16.0/firebase-firestore-compat.js"></script>
@@ -677,6 +674,37 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ---- CHARGEMENT DIFFÉRÉ (Leaflet et Excel ne sont chargés qu'à l'usage,
+// pour que l'app démarre beaucoup plus vite) ----
+const _loadedScripts = {};
+function loadScriptOnce(src){
+  if(_loadedScripts[src]) return _loadedScripts[src];
+  _loadedScripts[src] = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return _loadedScripts[src];
+}
+function loadStylesheetOnce(href){
+  if(document.querySelector(`link[href="${href}"]`)) return;
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = href;
+  document.head.appendChild(l);
+}
+async function ensureLeafletLoaded(){
+  if(typeof L !== 'undefined') return;
+  loadStylesheetOnce('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css');
+  await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js');
+}
+async function ensureXLSXLoaded(){
+  if(typeof XLSX !== 'undefined') return;
+  await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+}
+
 const STATUSES = ["Contact","Rappeler","RDV posé","R1 fait","R2 fait","R3 fait","Signé","Refus","Client perdu"];
 const STATUS_COLORS = {
   "Contact":"slate", "Rappeler":"rust", "RDV posé":"teal", "R1 fait":"teal",
@@ -1478,9 +1506,10 @@ function showManualCopyPrompt(text){
 }
 
 // ---- EXPORT EXCEL (sauvegarde manuelle) ----
-function exportToExcel(){
+async function exportToExcel(){
+  await ensureXLSXLoaded().catch(()=>{});
   if(typeof XLSX === 'undefined'){
-    showToast("Export indisponible (bibliothèque non chargée)");
+    showToast("Export indisponible (connexion requise la 1ère fois)");
     return;
   }
   const rows = [...state.contacts]
@@ -1540,12 +1569,13 @@ document.getElementById('actionImport').onclick = ()=>{
   document.getElementById('importExcelInput').click();
 };
 
-document.getElementById('importExcelInput').addEventListener('change', (e)=>{
+document.getElementById('importExcelInput').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   e.target.value = ''; // permet de réimporter le même fichier plus tard si besoin
   if(!file) return;
+  await ensureXLSXLoaded().catch(()=>{});
   if(typeof XLSX === 'undefined'){
-    showToast("Import indisponible (bibliothèque non chargée)");
+    showToast("Import indisponible (connexion requise la 1ère fois)");
     return;
   }
 
@@ -1775,34 +1805,36 @@ function initMap(){
 function renderMap(){
   const mapEl = document.getElementById('mapView');
   mapEl.classList.add('active');
-  initMap();
-  setTimeout(()=> leafletMap.invalidateSize(), 50);
+  ensureLeafletLoaded().then(()=>{
+    initMap();
+    setTimeout(()=> leafletMap.invalidateSize(), 50);
 
-  mapMarkersLayer.clearLayers();
-  const byCity = {};
-  state.contacts.forEach(c=>{
-    if(!c.ville) return;
-    if(!byCity[c.ville]) byCity[c.ville] = [];
-    byCity[c.ville].push(c);
-  });
-
-  const bounds = [];
-  Object.keys(byCity).forEach(ville=>{
-    const coords = CITY_COORDS[ville];
-    if(!coords) return;
-    bounds.push(coords);
-    const contacts = byCity[ville];
-    const popupItems = contacts.slice(0,12).map(c=>
-      `<div class="map-popup-item" onclick="openSheet(${c.id})"><b>${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}</b><br>${escapeHtml(c.profession||'')} · ${escapeHtml(c.statut)}</div>`
-    ).join('');
-    const marker = L.circleMarker(coords, {
-      radius: Math.min(8 + contacts.length, 20),
-      fillColor: '#A9782F', color:'#7A5620', weight:1.5, fillOpacity:0.75
+    mapMarkersLayer.clearLayers();
+    const byCity = {};
+    state.contacts.forEach(c=>{
+      if(!c.ville) return;
+      if(!byCity[c.ville]) byCity[c.ville] = [];
+      byCity[c.ville].push(c);
     });
-    marker.bindPopup(`<b>${escapeHtml(ville)}</b> · ${contacts.length} contact${contacts.length>1?'s':''}<br>${popupItems}`);
-    marker.addTo(mapMarkersLayer);
-  });
-  if(bounds.length) leafletMap.fitBounds(bounds, {padding:[30,30], maxZoom:9});
+
+    const bounds = [];
+    Object.keys(byCity).forEach(ville=>{
+      const coords = CITY_COORDS[ville];
+      if(!coords) return;
+      bounds.push(coords);
+      const contacts = byCity[ville];
+      const popupItems = contacts.slice(0,12).map(c=>
+        `<div class="map-popup-item" onclick="openSheet(${c.id})"><b>${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}</b><br>${escapeHtml(c.profession||'')} · ${escapeHtml(c.statut)}</div>`
+      ).join('');
+      const marker = L.circleMarker(coords, {
+        radius: Math.min(8 + contacts.length, 20),
+        fillColor: '#A9782F', color:'#7A5620', weight:1.5, fillOpacity:0.75
+      });
+      marker.bindPopup(`<b>${escapeHtml(ville)}</b> · ${contacts.length} contact${contacts.length>1?'s':''}<br>${popupItems}`);
+      marker.addTo(mapMarkersLayer);
+    });
+    if(bounds.length) leafletMap.fitBounds(bounds, {padding:[30,30], maxZoom:9});
+  }).catch(()=> showToast("Impossible de charger la carte (connexion requise la 1ère fois)"));
 }
 
 function hideMap(){
