@@ -583,6 +583,11 @@
     </div>
     <div class="field"><label>Recommandé par</label><input id="f_reco" type="text" autocomplete="off"></div>
     <div class="field">
+      <label>DE (binôme)</label>
+      <input id="f_de" type="text" autocomplete="off" placeholder="Prénom NOM" list="deSuggestions">
+      <datalist id="deSuggestions"></datalist>
+    </div>
+    <div class="field">
       <label>Date de rappel</label>
       <input id="f_rappel_date" type="date">
     </div>
@@ -1066,6 +1071,22 @@ function formatTimestampFr(ms){
   return `${day}/${month}/${year} à ${h}h${min}`;
 }
 
+function normalizeNameFormat(str){
+  if(!str) return '';
+  return str.trim().split(/\s+/).map((word, i)=>{
+    if(word.length === 0) return word;
+    return i === 0
+      ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      : word.toUpperCase();
+  }).join(' ');
+}
+
+function populateDeSuggestions(){
+  const list = document.getElementById('deSuggestions');
+  const values = [...new Set(state.contacts.map(c=>c.de).filter(Boolean))].sort();
+  list.innerHTML = values.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+}
+
 function renderHistory(c){
   const field = document.getElementById('historiqueField');
   const list = document.getElementById('historyList');
@@ -1308,6 +1329,8 @@ function openSheet(id){
   document.getElementById('f_ville').value = c ? c.ville : '';
   document.getElementById('f_profession').value = c ? c.profession : '';
   document.getElementById('f_reco').value = c ? c.reco : '';
+  document.getElementById('f_de').value = c ? (c.de || '') : '';
+  populateDeSuggestions();
   document.getElementById('f_rappel_date').value = c ? (c.rappel_date || '') : '';
   document.getElementById('f_rappel_note').value = c ? (c.rappel_note || '') : '';
   document.getElementById('f_commentaires').value = c ? c.commentaires : '';
@@ -1340,6 +1363,7 @@ document.getElementById('saveBtn').onclick = async ()=>{
     ville: document.getElementById('f_ville').value.trim(),
     profession: document.getElementById('f_profession').value.trim(),
     reco: document.getElementById('f_reco').value.trim(),
+    de: normalizeNameFormat(document.getElementById('f_de').value.trim()),
     rappel_date: document.getElementById('f_rappel_date').value || null,
     rappel_note: document.getElementById('f_rappel_note').value.trim(),
     commentaires: document.getElementById('f_commentaires').value.trim(),
@@ -1421,6 +1445,10 @@ function updateCallInlineBtn(){
   }
 }
 document.getElementById('f_tel').addEventListener('input', updateCallInlineBtn);
+
+document.getElementById('f_de').addEventListener('blur', (e)=>{
+  e.target.value = normalizeNameFormat(e.target.value);
+});
 
 // ---- RECHERCHE : croix pour effacer ----
 const searchInput = document.getElementById('search');
@@ -1521,6 +1549,7 @@ async function exportToExcel(){
       "Ville": c.ville || '',
       "Profession": c.profession || '',
       "Recommandé par": c.reco || '',
+      "DE": c.de || '',
       "Statut": c.statut || '',
       "Date de rappel": c.rappel_date ? formatDateFr(c.rappel_date) : '',
       "Objet du rappel": c.rappel_note || '',
@@ -1529,7 +1558,7 @@ async function exportToExcel(){
 
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [
-    {wch:18},{wch:14},{wch:16},{wch:16},{wch:20},{wch:20},{wch:12},{wch:14},{wch:26},{wch:40}
+    {wch:18},{wch:14},{wch:16},{wch:16},{wch:20},{wch:20},{wch:18},{wch:12},{wch:14},{wch:26},{wch:40}
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Recos');
@@ -1547,6 +1576,7 @@ const IMPORT_FIELD_CANDIDATES = {
   ville: ['ville','city','commune'],
   profession: ['profession','metier','job','activite'],
   reco: ['recommandepar','reco','recommandation','parrain'],
+  de: ['de','binome'],
   commentaires: ['commentaires','commentaire','notes','remarque','remarques']
 };
 
@@ -1607,7 +1637,7 @@ document.getElementById('importExcelInput').addEventListener('change', async (e)
         .map(r => ({
           nom: get(r,'nom'), prenom: get(r,'prenom'), tel: get(r,'tel'),
           ville: get(r,'ville'), profession: get(r,'profession'),
-          reco: get(r,'reco'), commentaires: get(r,'commentaires')
+          reco: get(r,'reco'), de: normalizeNameFormat(get(r,'de')), commentaires: get(r,'commentaires')
         }))
         .filter(c => c.nom || c.prenom);
 
@@ -1623,7 +1653,7 @@ document.getElementById('importExcelInput').addEventListener('change', async (e)
         id: nextId++,
         createdAt: Date.now(),
         nom: c.nom, prenom: c.prenom, tel: c.tel, ville: c.ville,
-        profession: c.profession, reco: c.reco, statut: 'Contact', commentaires: c.commentaires,
+        profession: c.profession, reco: c.reco, de: c.de, statut: 'Contact', commentaires: c.commentaires,
         historique: [{ date: Date.now(), from: null, to: 'Contact' }]
       }));
       state.contacts.push(...newContacts);
