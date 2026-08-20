@@ -119,9 +119,31 @@
   .search-wrap input::placeholder{color:var(--placeholder);}
 
   .sort-row{
-    display:flex; align-items:center; gap:8px; margin-top:8px; padding: 0 2px;
+    display:flex; align-items:center; gap:8px; margin-top:8px; padding: 0 2px; flex-wrap:wrap;
   }
   .sort-label{font-size:12.5px; color:var(--ink-soft); flex:none;}
+  .filter-btn{
+    font-family:'IBM Plex Sans', sans-serif; font-size:12.5px; color:var(--ink);
+    background:var(--paper-2); border:1px solid var(--line); border-radius:20px;
+    padding:5px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:4px;
+  }
+  .filter-btn.active{background:var(--brass-soft); color:var(--brass-ink); border-color:var(--brass-soft);}
+  .filter-list{display:flex; flex-direction:column; gap:2px; max-height:52vh; overflow-y:auto; margin-top:4px;}
+  .filter-item{
+    display:flex; align-items:center; gap:11px; padding:11px 4px; border-top:1px solid var(--line);
+    cursor:pointer; font-size:14.5px; color:var(--ink);
+  }
+  .filter-item:first-child{border-top:none;}
+  .filter-checkbox{
+    flex:none; width:20px; height:20px; border-radius:6px; border:2px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff;
+  }
+  .filter-checkbox.checked{background:var(--brass); border-color:var(--brass);}
+  .filter-actions{display:flex; justify-content:space-between; gap:10px; margin-top:10px;}
+  .filter-actions button{
+    background:none; border:none; color:var(--ink-soft); font-size:12.5px; text-decoration:underline;
+    cursor:pointer; font-family:'IBM Plex Sans', sans-serif; padding:4px;
+  }
   #sortSelect{
     font-family:'IBM Plex Sans', sans-serif; font-size:12.5px; color:var(--ink);
     background:var(--paper-2); border:1px solid var(--line); border-radius:20px;
@@ -521,12 +543,30 @@
     <select id="sortSelect">
       <option value="rappel">Rappel (défaut)</option>
       <option value="nom">Nom (A → Z)</option>
+      <option value="de">DE (A → Z)</option>
       <option value="recent">Ajout : plus récent</option>
       <option value="ancien">Ajout : plus ancien</option>
     </select>
+    <button class="filter-btn" id="filterDeBtn">Binôme</button>
+    <button class="filter-btn" id="filterVilleBtn">Ville</button>
   </div>
   <div class="tabs" id="tabs"></div>
 </header>
+
+<div class="overlay" id="filterOverlay">
+  <div class="sheet" style="max-width:440px;">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      <h2 class="display" id="filterSheetTitle">Filtrer</h2>
+      <button class="close" id="closeFilterSheet">&times;</button>
+    </div>
+    <div class="filter-list" id="filterList"></div>
+    <div class="filter-actions">
+      <button id="filterClearBtn">Tout désélectionner</button>
+      <button id="filterAllBtn">Tout sélectionner</button>
+    </div>
+  </div>
+</div>
 
 <main id="list"></main>
 <div id="mapView"></div>
@@ -730,7 +770,9 @@ let state = {
   editingId: null,
   sortMode: localStorage.getItem('recos-sort-mode') || 'rappel',
   selectMode: false,
-  selectedIds: new Set()
+  selectedIds: new Set(),
+  filterDe: new Set(),
+  filterVille: new Set()
 };
 
 function getCreatedAt(c){
@@ -1081,6 +1123,71 @@ function normalizeNameFormat(str){
   }).join(' ');
 }
 
+// ---- FILTRES (Binôme / Ville) ----
+let currentFilterField = null; // 'de' ou 'ville'
+
+function openFilterSheet(field){
+  currentFilterField = field;
+  const filterSet = field === 'de' ? state.filterDe : state.filterVille;
+  const values = [...new Set(state.contacts.map(c => c[field]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const hasEmpty = state.contacts.some(c => !c[field]);
+
+  document.getElementById('filterSheetTitle').textContent = field === 'de' ? 'Filtrer par binôme' : 'Filtrer par ville';
+
+  const list = document.getElementById('filterList');
+  list.innerHTML = '';
+
+  const renderItem = (label, value)=>{
+    const checked = filterSet.has(value);
+    const item = document.createElement('div');
+    item.className = 'filter-item';
+    item.innerHTML = `<span class="filter-checkbox${checked ? ' checked' : ''}">${checked ? '✓' : ''}</span>${escapeHtml(label)}`;
+    item.onclick = ()=>{
+      if(filterSet.has(value)) filterSet.delete(value); else filterSet.add(value);
+      openFilterSheet(field); // rafraîchit l'affichage des coches
+      renderList();
+      updateFilterButtonsUI();
+    };
+    list.appendChild(item);
+  };
+
+  values.forEach(v => renderItem(v, v));
+  if(hasEmpty) renderItem(field === 'de' ? '(Sans binôme)' : '(Sans ville)', '');
+
+  document.getElementById('filterOverlay').classList.add('open');
+}
+
+function updateFilterButtonsUI(){
+  const deBtn = document.getElementById('filterDeBtn');
+  const villeBtn = document.getElementById('filterVilleBtn');
+  deBtn.textContent = state.filterDe.size > 0 ? `Binôme (${state.filterDe.size})` : 'Binôme';
+  deBtn.classList.toggle('active', state.filterDe.size > 0);
+  villeBtn.textContent = state.filterVille.size > 0 ? `Ville (${state.filterVille.size})` : 'Ville';
+  villeBtn.classList.toggle('active', state.filterVille.size > 0);
+}
+
+document.getElementById('filterDeBtn').onclick = ()=> openFilterSheet('de');
+document.getElementById('filterVilleBtn').onclick = ()=> openFilterSheet('ville');
+document.getElementById('closeFilterSheet').onclick = ()=> document.getElementById('filterOverlay').classList.remove('open');
+document.getElementById('filterOverlay').addEventListener('click', (e)=>{ if(e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+
+document.getElementById('filterClearBtn').onclick = ()=>{
+  const filterSet = currentFilterField === 'de' ? state.filterDe : state.filterVille;
+  filterSet.clear();
+  openFilterSheet(currentFilterField);
+  renderList();
+  updateFilterButtonsUI();
+};
+document.getElementById('filterAllBtn').onclick = ()=>{
+  const field = currentFilterField;
+  const filterSet = field === 'de' ? state.filterDe : state.filterVille;
+  const uniqueValues = [...new Set(state.contacts.map(c => c[field] || ''))];
+  uniqueValues.forEach(v => filterSet.add(v));
+  openFilterSheet(field);
+  renderList();
+  updateFilterButtonsUI();
+};
+
 function populateDeSuggestions(){
   const list = document.getElementById('deSuggestions');
   const values = [...new Set(state.contacts.map(c=>c.de).filter(Boolean))].sort();
@@ -1114,6 +1221,12 @@ function matchesSearch(c, q){
   return [c.nom,c.prenom,c.ville,c.profession,c.reco,c.commentaires].join(' ').toLowerCase().includes(q);
 }
 
+function matchesFilters(c){
+  if(state.filterDe.size > 0 && !state.filterDe.has(c.de || '')) return false;
+  if(state.filterVille.size > 0 && !state.filterVille.has(c.ville || '')) return false;
+  return true;
+}
+
 function sortContacts(list, isTodayView){
   // la vue "Aujourd'hui" reste toujours triée par urgence, quel que soit le
   // mode de tri choisi ailleurs — c'est tout l'intérêt de cette vue
@@ -1130,6 +1243,16 @@ function sortContacts(list, isTodayView){
       return list.sort((a,b)=>{
         const n = (a.nom||'').localeCompare(b.nom||'');
         return n !== 0 ? n : (a.prenom||'').localeCompare(b.prenom||'');
+      });
+    case 'de':
+      return list.sort((a,b)=>{
+        const ad = a.de || '';
+        const bd = b.de || '';
+        if(!ad && !bd) return (a.nom||'').localeCompare(b.nom||'');
+        if(!ad) return 1; // sans binôme renvoyé en fin de liste
+        if(!bd) return -1;
+        const d = ad.localeCompare(bd);
+        return d !== 0 ? d : (a.nom||'').localeCompare(b.nom||'');
       });
     case 'recent':
       return list.sort((a,b)=> getCreatedAt(b) - getCreatedAt(a));
@@ -1151,7 +1274,7 @@ function renderList(){
   list.innerHTML = '';
   const isTodayView = state.activeStatus === '__TODAY__';
   const items = sortContacts(
-    state.contacts.filter(c => (isTodayView ? isDueTodayOrOverdue(c) : c.statut === state.activeStatus) && matchesSearch(c, state.search)),
+    state.contacts.filter(c => (isTodayView ? isDueTodayOrOverdue(c) : c.statut === state.activeStatus) && matchesSearch(c, state.search) && matchesFilters(c)),
     isTodayView
   );
 
@@ -1179,7 +1302,7 @@ function renderList(){
           <div class="name">${escapeHtml(c.prenom)} ${escapeHtml(c.nom)}</div>
           <div class="ville">${escapeHtml(c.ville||'')}</div>
         </div>
-        <div class="profession">${escapeHtml(c.profession||'')}${isTodayView ? ` · <span style="color:var(--ink-soft)">${escapeHtml(c.statut)}</span>` : ''}</div>
+        <div class="profession">${escapeHtml(c.profession||'')}${isTodayView ? ` · <span style="color:var(--ink-soft)">${escapeHtml(c.statut)}</span>` : ''}${(state.sortMode==='de' && c.de) ? ` · <span style="color:var(--ink-soft)">DE ${escapeHtml(c.de)}</span>` : ''}</div>
         ${c.tel ? `<a class="phone-line" href="tel:${telHref}" onclick="event.stopPropagation()">📞 ${escapeHtml(c.tel)}</a>` : ''}
         ${c.reco ? `<div class="reco">↳ reco. ${escapeHtml(c.reco)}</div>` : ''}
         ${c.commentaires ? `<div class="comment">${escapeHtml(c.commentaires)}</div>` : ''}
