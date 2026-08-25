@@ -506,6 +506,7 @@
   <form class="login-card" id="loginForm">
     <h1 class="display">Recos</h1>
     <p class="login-sub" id="loginSub">Connexion sécurisée</p>
+    <div class="field" id="loginNameField" style="display:none;"><label>Nom complet</label><input id="loginName" type="text" autocomplete="name" placeholder="Prénom NOM"></div>
     <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" required></div>
     <div class="field"><label>Mot de passe</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
     <p class="login-hint">Réservé aux collaborateurs Capfinances (@capfinances.fr)</p>
@@ -840,6 +841,8 @@ function loadData(){
     docRef = db.collection('users').doc(user.uid).collection('data').doc('recos-data');
 
     await migrateLegacyDataIfNeeded(user);
+    await ensureDirectoryEntry(user);
+    attachInboxListener(user);
 
     // écoute en temps réel : toute modif sur un autre appareil arrive ici automatiquement
     snapshotUnsubscribe = docRef.onSnapshot(snap=>{
@@ -884,6 +887,92 @@ async function migrateLegacyDataIfNeeded(user){
   }
 }
 
+// ---- ANNUAIRE DES CONSEILLERS (pour le partage entre binômes) ----
+let myDirectoryName = null;
+
+async function ensureDirectoryEntry(user){
+  try{
+    const ref = db.collection('directory').doc(user.uid);
+    const snap = await ref.get();
+    if(snap.exists && snap.data().name){
+      myDirectoryName = snap.data().name;
+      return;
+    }
+    // compte créé avant l'introduction de l'annuaire : on demande le nom une seule fois
+    let name = window.prompt("Pour activer le partage entre binômes, indique ton nom complet (Prénom NOM) :");
+    name = normalizeNameFormat((name || '').trim());
+    if(!name) return; // l'utilisateur peut annuler, on ne bloque pas l'app pour autant
+    await ref.set({ name, nameKey: normalizeKey(name), email: user.email });
+    myDirectoryName = name;
+  }catch(e){
+    console.warn("Annuaire indisponible", e);
+  }
+}
+
+async function findAccountByName(name){
+  if(!name) return null;
+  const key = normalizeKey(name);
+  if(!key) return null;
+  try{
+    const q = await db.collection('directory').where('nameKey', '==', key).limit(1).get();
+    if(q.empty) return null;
+    const doc = q.docs[0];
+    if(doc.id === auth.currentUser.uid) return null; // on ne se partage pas un contact à soi-même
+    return { uid: doc.id, name: doc.data().name };
+  }catch(e){
+    console.warn("Recherche annuaire impossible", e);
+    return null;
+  }
+}
+
+async function shareContactWithBinome(contact, deName){
+  const account = await findAccountByName(deName);
+  if(!account){
+    return { shared:false, reason:'not_found' };
+  }
+  try{
+    const inboxRef = db.collection('users').doc(account.uid).collection('inbox').doc();
+    await inboxRef.set({
+      nom: contact.nom || '', prenom: contact.prenom || '', tel: contact.tel || '',
+      ville: contact.ville || '', profession: contact.profession || '',
+      reco: contact.reco || '', commentaires: contact.commentaires || '',
+      de: myDirectoryName || '', // vu depuis le binôme, "DE" = la personne qui partage
+      sharedByName: myDirectoryName || '',
+      sharedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return { shared:true, name: account.name };
+  }catch(e){
+    console.warn("Partage impossible", e);
+    return { shared:false, reason:'error' };
+  }
+}
+
+function attachInboxListener(user){
+  db.collection('users').doc(user.uid).collection('inbox').onSnapshot(snap=>{
+    snap.docChanges().forEach(change=>{
+      if(change.type !== 'added') return;
+      const data = change.doc.data();
+      let nextId = state.contacts.length ? Math.max(...state.contacts.map(c=>c.id))+1 : 1;
+      const newContact = {
+        id: nextId,
+        createdAt: Date.now(),
+        nom: data.nom || '', prenom: data.prenom || '', tel: data.tel || '',
+        ville: data.ville || '', profession: data.profession || '',
+        reco: data.reco || '', de: data.de || '', statut: 'Contact',
+        commentaires: data.commentaires || '',
+        historique: [{ date: Date.now(), from: null, to: 'Contact' }]
+      };
+      state.contacts.push(newContact);
+      persist();
+      render();
+      showToast(`Contact reçu de ${data.sharedByName || 'un binôme'} : ${newContact.prenom} ${newContact.nom}`);
+      change.doc.ref.delete().catch(()=>{});
+    });
+  }, err=>{
+    console.warn("Écoute de la boîte de partage impossible", err);
+  });
+}
+
 // ---- CONNEXION / INSCRIPTION / DÉCONNEXION ----
 const ALLOWED_EMAIL_DOMAIN = '@capfinances.fr';
 let authMode = 'login'; // 'login' ou 'signup'
@@ -893,6 +982,8 @@ function updateAuthModeUI(){
   document.getElementById('toggleAuthMode').textContent = authMode === 'signup' ? 'Déjà un compte ? Se connecter' : 'Pas encore de compte ? Créer un compte';
   document.getElementById('loginSub').textContent = authMode === 'signup' ? 'Créer un compte' : 'Connexion sécurisée';
   document.getElementById('forgotPasswordLink').style.display = authMode === 'signup' ? 'none' : 'block';
+  document.getElementById('loginNameField').style.display = authMode === 'signup' ? 'block' : 'none';
+  document.getElementById('loginName').required = authMode === 'signup';
   document.getElementById('loginError').textContent = '';
 }
 document.getElementById('toggleAuthMode').onclick = (e)=>{
@@ -919,6 +1010,7 @@ document.getElementById('loginForm').addEventListener('submit', (e)=>{
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
+  const fullName = normalizeNameFormat(document.getElementById('loginName').value.trim());
   const errEl = document.getElementById('loginError');
   errEl.style.color = 'var(--rust)';
   errEl.textContent = '';
@@ -927,9 +1019,19 @@ document.getElementById('loginForm').addEventListener('submit', (e)=>{
     errEl.textContent = `Réservé aux emails ${ALLOWED_EMAIL_DOMAIN}`;
     return;
   }
+  if(authMode === 'signup' && !fullName){
+    errEl.textContent = "Indique ton nom complet (Prénom NOM).";
+    return;
+  }
 
   const action = authMode === 'signup'
-    ? auth.createUserWithEmailAndPassword(email, password)
+    ? auth.createUserWithEmailAndPassword(email, password).then(cred=>{
+        return db.collection('directory').doc(cred.user.uid).set({
+          name: fullName,
+          nameKey: normalizeKey(fullName),
+          email: email
+        });
+      })
     : auth.signInWithEmailAndPassword(email, password);
 
   action.catch(err=>{
@@ -1508,6 +1610,10 @@ document.getElementById('saveBtn').onclick = async ()=>{
     if(!proceed) return;
   }
 
+  const previousDe = state.editingId
+    ? (state.contacts.find(c=>c.id===state.editingId) || {}).de
+    : null;
+
   if(state.editingId){
     const idx = state.contacts.findIndex(c=>c.id===state.editingId);
     const old = state.contacts[idx];
@@ -1531,6 +1637,17 @@ document.getElementById('saveBtn').onclick = async ()=>{
   persist();
   closeSheet();
   render();
+
+  // partage automatique avec le binôme, si le champ DE a été renseigné/modifié
+  if(data.de && data.de !== previousDe){
+    shareContactWithBinome(data, data.de).then(result=>{
+      if(result.shared){
+        showToast(`Contact partagé avec ${result.name}`);
+      } else if(result.reason === 'not_found'){
+        showToast(`"${data.de}" introuvable — le contact n'a pas encore de compte Recos`);
+      }
+    });
+  }
 };
 
 document.getElementById('deleteBtn').onclick = async ()=>{
