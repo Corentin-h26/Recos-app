@@ -517,6 +517,20 @@
   </form>
 </div>
 
+<div class="login-screen" id="nameSetupScreen">
+  <form class="login-card" id="nameSetupForm">
+    <h1 class="display">Recos</h1>
+    <p class="login-sub">Dernière étape</p>
+    <p style="margin:-6px 0 4px; font-size:12.5px; color:var(--ink-soft); text-align:center;">
+      Indique ton nom complet pour activer le partage de contacts entre binômes.
+    </p>
+    <div class="field"><label>Nom complet</label><input id="nameSetupInput" type="text" autocomplete="name" placeholder="Prénom NOM" required></div>
+    <div class="login-error" id="nameSetupError"></div>
+    <button class="btn btn-primary" type="submit" style="width:100%; justify-content:center; padding:12px;">Valider</button>
+    <a href="#" class="login-forgot" id="nameSetupSkip">Plus tard</a>
+  </form>
+</div>
+
 <header>
   <div class="brand">
     <h1>Recos <span class="tally" id="tally">…</span></h1>
@@ -898,16 +912,38 @@ async function ensureDirectoryEntry(user){
       myDirectoryName = snap.data().name;
       return;
     }
-    // compte créé avant l'introduction de l'annuaire : on demande le nom une seule fois
-    let name = window.prompt("Pour activer le partage entre binômes, indique ton nom complet (Prénom NOM) :");
-    name = normalizeNameFormat((name || '').trim());
-    if(!name) return; // l'utilisateur peut annuler, on ne bloque pas l'app pour autant
-    await ref.set({ name, nameKey: normalizeKey(name), email: user.email });
-    myDirectoryName = name;
+    // compte créé avant l'introduction de l'annuaire : on demande le nom une seule fois,
+    // via un écran dédié (window.prompt ne fonctionne pas dans une app ajoutée à l'écran d'accueil)
+    document.getElementById('nameSetupScreen').classList.add('show');
   }catch(e){
     console.warn("Annuaire indisponible", e);
   }
 }
+
+document.getElementById('nameSetupForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const errEl = document.getElementById('nameSetupError');
+  errEl.style.color = 'var(--rust)';
+  errEl.textContent = '';
+  const name = normalizeNameFormat(document.getElementById('nameSetupInput').value.trim());
+  if(!name){
+    errEl.textContent = "Merci d'indiquer ton nom complet.";
+    return;
+  }
+  try{
+    const user = auth.currentUser;
+    await db.collection('directory').doc(user.uid).set({ name, nameKey: normalizeKey(name), email: user.email });
+    myDirectoryName = name;
+    document.getElementById('nameSetupScreen').classList.remove('show');
+  }catch(err){
+    errEl.textContent = "Impossible d'enregistrer ton nom pour le moment. Réessaie plus tard.";
+  }
+});
+
+document.getElementById('nameSetupSkip').onclick = (e)=>{
+  e.preventDefault();
+  document.getElementById('nameSetupScreen').classList.remove('show');
+};
 
 async function findAccountByName(name){
   if(!name) return null;
