@@ -128,7 +128,13 @@
     padding:5px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:4px;
   }
   .filter-btn.active{background:var(--brass-soft); color:var(--brass-ink); border-color:var(--brass-soft);}
+  .filter-search{
+    width:100%; margin-top:8px; padding:9px 12px; border:1px solid var(--line); background:var(--surface);
+    border-radius:10px; font-family:'IBM Plex Sans', sans-serif; font-size:13.5px; color:var(--ink);
+  }
+  .filter-search::placeholder{color:var(--placeholder);}
   .filter-list{display:flex; flex-direction:column; gap:2px; max-height:52vh; overflow-y:auto; margin-top:4px;}
+  .filter-empty{padding:16px 4px; font-size:13px; color:var(--ink-soft); text-align:center;}
   .filter-item{
     display:flex; align-items:center; gap:11px; padding:11px 4px; border-top:1px solid var(--line);
     cursor:pointer; font-size:14.5px; color:var(--ink);
@@ -577,6 +583,7 @@
       <h2 class="display" id="filterSheetTitle">Filtrer</h2>
       <button class="close" id="closeFilterSheet">&times;</button>
     </div>
+    <input type="text" id="filterSearchInput" class="filter-search" placeholder="Rechercher...">
     <div class="filter-list" id="filterList"></div>
     <div class="filter-actions">
       <button id="filterClearBtn">Tout désélectionner</button>
@@ -1271,16 +1278,34 @@ const FILTER_FIELDS = {
 };
 let currentFilterField = null;
 
+let currentFilterValues = [];
+let currentFilterHasEmpty = false;
+
+function normalizeSearchText(s){
+  return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
+
 function openFilterSheet(field){
   currentFilterField = field;
-  const filterSet = state.filters[field];
-  const values = [...new Set(state.contacts.map(c => c[field]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const hasEmpty = state.contacts.some(c => !c[field]);
+  currentFilterValues = [...new Set(state.contacts.map(c => c[field]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  currentFilterHasEmpty = state.contacts.some(c => !c[field]);
 
   document.getElementById('filterSheetTitle').textContent = `Filtrer par ${FILTER_FIELDS[field].label.toLowerCase()}`;
+  const searchInput = document.getElementById('filterSearchInput');
+  searchInput.value = '';
+  searchInput.placeholder = `Rechercher : ${FILTER_FIELDS[field].label.toLowerCase()}...`;
 
+  renderFilterItems('');
+  document.getElementById('filterOverlay').classList.add('open');
+}
+
+function renderFilterItems(query){
+  const field = currentFilterField;
+  const filterSet = state.filters[field];
   const list = document.getElementById('filterList');
   list.innerHTML = '';
+
+  const q = normalizeSearchText(query.trim());
 
   const renderItem = (label, value)=>{
     const checked = filterSet.has(value);
@@ -1289,18 +1314,34 @@ function openFilterSheet(field){
     item.innerHTML = `<span class="filter-checkbox${checked ? ' checked' : ''}">${checked ? '✓' : ''}</span>${escapeHtml(label)}`;
     item.onclick = ()=>{
       if(filterSet.has(value)) filterSet.delete(value); else filterSet.add(value);
-      openFilterSheet(field); // rafraîchit l'affichage des coches
+      renderFilterItems(document.getElementById('filterSearchInput').value);
       renderList();
       updateFilterButtonsUI();
     };
     list.appendChild(item);
   };
 
-  values.forEach(v => renderItem(v, v));
-  if(hasEmpty) renderItem(FILTER_FIELDS[field].emptyLabel, '');
-
-  document.getElementById('filterOverlay').classList.add('open');
+  let shown = 0;
+  currentFilterValues.forEach(v=>{
+    if(q && !normalizeSearchText(v).includes(q)) return;
+    renderItem(v, v);
+    shown++;
+  });
+  if(currentFilterHasEmpty){
+    const emptyLabel = FILTER_FIELDS[field].emptyLabel;
+    if(!q || normalizeSearchText(emptyLabel).includes(q)){
+      renderItem(emptyLabel, '');
+      shown++;
+    }
+  }
+  if(shown === 0){
+    list.innerHTML = `<div class="filter-empty">Aucun résultat pour "${escapeHtml(query)}"</div>`;
+  }
 }
+
+document.getElementById('filterSearchInput').addEventListener('input', (e)=>{
+  renderFilterItems(e.target.value);
+});
 
 function updateFilterButtonsUI(){
   Object.keys(FILTER_FIELDS).forEach(field=>{
@@ -1320,17 +1361,30 @@ document.getElementById('closeFilterSheet').onclick = ()=> document.getElementBy
 document.getElementById('filterOverlay').addEventListener('click', (e)=>{ if(e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
 
 document.getElementById('filterClearBtn').onclick = ()=>{
-  state.filters[currentFilterField].clear();
-  openFilterSheet(currentFilterField);
+  const query = document.getElementById('filterSearchInput').value;
+  const q = normalizeSearchText(query.trim());
+  const field = currentFilterField;
+  const filterSet = state.filters[field];
+  if(!q){
+    filterSet.clear();
+  } else {
+    // ne désélectionne que ce qui correspond à la recherche en cours
+    currentFilterValues.filter(v => normalizeSearchText(v).includes(q)).forEach(v => filterSet.delete(v));
+    if(normalizeSearchText(FILTER_FIELDS[field].emptyLabel).includes(q)) filterSet.delete('');
+  }
+  renderFilterItems(query);
   renderList();
   updateFilterButtonsUI();
 };
 document.getElementById('filterAllBtn').onclick = ()=>{
+  const query = document.getElementById('filterSearchInput').value;
+  const q = normalizeSearchText(query.trim());
   const field = currentFilterField;
   const filterSet = state.filters[field];
-  const uniqueValues = [...new Set(state.contacts.map(c => c[field] || ''))];
-  uniqueValues.forEach(v => filterSet.add(v));
-  openFilterSheet(field);
+  const toSelect = q ? currentFilterValues.filter(v => normalizeSearchText(v).includes(q)) : [...currentFilterValues];
+  toSelect.forEach(v => filterSet.add(v));
+  if(currentFilterHasEmpty && (!q || normalizeSearchText(FILTER_FIELDS[field].emptyLabel).includes(q))) filterSet.add('');
+  renderFilterItems(query);
   renderList();
   updateFilterButtonsUI();
 };
