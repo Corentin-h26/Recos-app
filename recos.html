@@ -562,8 +562,10 @@
       <option value="recent">Ajout : plus récent</option>
       <option value="ancien">Ajout : plus ancien</option>
     </select>
-    <button class="filter-btn" id="filterDeBtn">Binôme</button>
-    <button class="filter-btn" id="filterVilleBtn">Ville</button>
+    <button class="filter-btn" id="filterBtn_de">Binôme</button>
+    <button class="filter-btn" id="filterBtn_ville">Ville</button>
+    <button class="filter-btn" id="filterBtn_tel">Téléphone</button>
+    <button class="filter-btn" id="filterBtn_reco">Recommandé par</button>
   </div>
   <div class="tabs" id="tabs"></div>
 </header>
@@ -765,15 +767,15 @@ async function ensureXLSXLoaded(){
   await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 }
 
-const STATUSES = ["Contact","Rappeler","RDV posé","R1 fait","R2 fait","R3 fait","Signé","Refus","Client perdu"];
+const STATUSES = ["Contact","Rappeler","RDV posé","R1 fait","R2 fait","R3 fait","Signé","Refus","Client perdu","Conférence"];
 const STATUS_COLORS = {
   "Contact":"slate", "Rappeler":"rust", "RDV posé":"teal", "R1 fait":"teal",
-  "R2 fait":"teal", "R3 fait":"teal", "Signé":"brass", "Refus":"slate", "Client perdu":"slate"
+  "R2 fait":"teal", "R3 fait":"teal", "Signé":"brass", "Refus":"slate", "Client perdu":"slate", "Conférence":"teal"
 };
 const STATUS_HEX = {
   "Contact":"#8B95A1", "Rappeler":"#C97B5F", "RDV posé":"#D9A441",
   "R1 fait":"#7FAFA6", "R2 fait":"#4F8A80", "R3 fait":"#356F66",
-  "Signé":"#A9782F", "Refus":"#B3543E", "Client perdu":"#5B6B72"
+  "Signé":"#A9782F", "Refus":"#B3543E", "Client perdu":"#5B6B72", "Conférence":"#6B8FA3"
 };
 
 const SEED = []; // liste de démarrage retirée pour ne plus exposer de données clients dans le code source public
@@ -786,8 +788,7 @@ let state = {
   sortMode: localStorage.getItem('recos-sort-mode') || 'rappel',
   selectMode: false,
   selectedIds: new Set(),
-  filterDe: new Set(),
-  filterVille: new Set()
+  filters: { de: new Set(), ville: new Set(), tel: new Set(), reco: new Set() }
 };
 
 function getCreatedAt(c){
@@ -1261,16 +1262,22 @@ function normalizeNameFormat(str){
   }).join(' ');
 }
 
-// ---- FILTRES (Binôme / Ville) ----
-let currentFilterField = null; // 'de' ou 'ville'
+// ---- FILTRES (Binôme / Ville / Téléphone / Recommandé par) ----
+const FILTER_FIELDS = {
+  de: { label: 'Binôme', emptyLabel: '(Sans binôme)' },
+  ville: { label: 'Ville', emptyLabel: '(Sans ville)' },
+  tel: { label: 'Téléphone', emptyLabel: '(Sans téléphone)' },
+  reco: { label: 'Recommandé par', emptyLabel: '(Sans recommandation)' }
+};
+let currentFilterField = null;
 
 function openFilterSheet(field){
   currentFilterField = field;
-  const filterSet = field === 'de' ? state.filterDe : state.filterVille;
+  const filterSet = state.filters[field];
   const values = [...new Set(state.contacts.map(c => c[field]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const hasEmpty = state.contacts.some(c => !c[field]);
 
-  document.getElementById('filterSheetTitle').textContent = field === 'de' ? 'Filtrer par binôme' : 'Filtrer par ville';
+  document.getElementById('filterSheetTitle').textContent = `Filtrer par ${FILTER_FIELDS[field].label.toLowerCase()}`;
 
   const list = document.getElementById('filterList');
   list.innerHTML = '';
@@ -1290,35 +1297,37 @@ function openFilterSheet(field){
   };
 
   values.forEach(v => renderItem(v, v));
-  if(hasEmpty) renderItem(field === 'de' ? '(Sans binôme)' : '(Sans ville)', '');
+  if(hasEmpty) renderItem(FILTER_FIELDS[field].emptyLabel, '');
 
   document.getElementById('filterOverlay').classList.add('open');
 }
 
 function updateFilterButtonsUI(){
-  const deBtn = document.getElementById('filterDeBtn');
-  const villeBtn = document.getElementById('filterVilleBtn');
-  deBtn.textContent = state.filterDe.size > 0 ? `Binôme (${state.filterDe.size})` : 'Binôme';
-  deBtn.classList.toggle('active', state.filterDe.size > 0);
-  villeBtn.textContent = state.filterVille.size > 0 ? `Ville (${state.filterVille.size})` : 'Ville';
-  villeBtn.classList.toggle('active', state.filterVille.size > 0);
+  Object.keys(FILTER_FIELDS).forEach(field=>{
+    const btn = document.getElementById('filterBtn_' + field);
+    if(!btn) return;
+    const count = state.filters[field].size;
+    btn.textContent = count > 0 ? `${FILTER_FIELDS[field].label} (${count})` : FILTER_FIELDS[field].label;
+    btn.classList.toggle('active', count > 0);
+  });
 }
 
-document.getElementById('filterDeBtn').onclick = ()=> openFilterSheet('de');
-document.getElementById('filterVilleBtn').onclick = ()=> openFilterSheet('ville');
+Object.keys(FILTER_FIELDS).forEach(field=>{
+  const btn = document.getElementById('filterBtn_' + field);
+  if(btn) btn.onclick = ()=> openFilterSheet(field);
+});
 document.getElementById('closeFilterSheet').onclick = ()=> document.getElementById('filterOverlay').classList.remove('open');
 document.getElementById('filterOverlay').addEventListener('click', (e)=>{ if(e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
 
 document.getElementById('filterClearBtn').onclick = ()=>{
-  const filterSet = currentFilterField === 'de' ? state.filterDe : state.filterVille;
-  filterSet.clear();
+  state.filters[currentFilterField].clear();
   openFilterSheet(currentFilterField);
   renderList();
   updateFilterButtonsUI();
 };
 document.getElementById('filterAllBtn').onclick = ()=>{
   const field = currentFilterField;
-  const filterSet = field === 'de' ? state.filterDe : state.filterVille;
+  const filterSet = state.filters[field];
   const uniqueValues = [...new Set(state.contacts.map(c => c[field] || ''))];
   uniqueValues.forEach(v => filterSet.add(v));
   openFilterSheet(field);
@@ -1360,8 +1369,10 @@ function matchesSearch(c, q){
 }
 
 function matchesFilters(c){
-  if(state.filterDe.size > 0 && !state.filterDe.has(c.de || '')) return false;
-  if(state.filterVille.size > 0 && !state.filterVille.has(c.ville || '')) return false;
+  for(const field in state.filters){
+    const set = state.filters[field];
+    if(set.size > 0 && !set.has(c[field] || '')) return false;
+  }
   return true;
 }
 
